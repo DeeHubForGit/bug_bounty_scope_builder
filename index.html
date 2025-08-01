@@ -86,9 +86,70 @@
     </div>
     <!-- END INITIAL BUILDER SELECTION -->
 
-    <!-- DYNAMIC STEPS -->
+    <!-- STEPS -->
     <div id="stepContainer" class="pt-4 relative">
-      <!-- your JS will insert each step here -->
+      
+      <!-- REWARDS STEP -->
+      <div id="rewards-step" class="question-step min-h-[200px] hidden">
+        <div class="flex items-center gap-2 mb-1">
+          <label class="text-lg font-semibold text-gray-800">
+            💵 Reward Tiers
+          </label>
+          <div class="relative">
+            <span class="text-blue-500 cursor-pointer text-sm group">
+              ℹ️
+              <span class="absolute left-full top-1/2 ml-2 -translate-y-1/2 w-72 bg-blue-100 text-black text-sm rounded-lg shadow-lg p-3 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10 border border-blue-300">
+                A clear reward structure helps researchers understand the value of different findings and incentivises quality reports.<br><br>
+                <strong>Consider:</strong><br>
+                • Program budget<br>
+                • Asset criticality<br>
+                • Vulnerability impact<br>
+                • Industry standards<br>
+                • Report quality
+              </span>
+            </span>
+          </div>
+        </div>
+
+        <p class="text-sm text-gray-600 mb-4">Choose a tier or write your own reward structure.</p>
+
+        <div id="rewardTierCards">
+          <!-- Reward tier cards will be dynamically inserted here -->
+        </div>
+
+        <p class="text-sm text-gray-600 mt-4 italic">
+          <strong>Note:</strong> These ranges reflect industry averages across all severity levels. Actual bounties should be tailored to your organization's specific security needs, risk profile, and budget.
+        </p>
+
+        <div id="rewardDetails" class="mt-4 p-3 bg-blue-50 rounded-md hidden" style="display:none;"></div>
+      </div>
+      
+      <!-- FINAL STEP -->
+      <div id="final-step" class="question-step min-h-[200px] hidden">
+        <div class="flex items-center gap-2 mb-4">
+            <h2 class="text-xl font-bold text-gray-800">📄 Review Your Program Scope</h2>
+            <div class="relative group">
+                <span class="text-blue-500 cursor-pointer text-sm" tabindex="0">ℹ️</span>
+                <div class="absolute left-full top-1/2 ml-2 -translate-y-1/2 w-80 bg-blue-100 text-black text-sm rounded-lg shadow-lg p-3 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10 border border-blue-300 whitespace-pre-line">
+                    You can edit the summary text directly. However, if you delete any of the following lines, the system will not be able to auto-fill those sections:
+                    --START IN-SCOPE--
+                    --END IN-SCOPE--
+                    --START REWARDS--
+                    --END REWARDS--
+                </div>
+            </div>
+        </div>
+
+        <!-- Hidden input linked to Trix -->
+        <input type="hidden" id="final-step-input" />
+
+        <!-- Trix editor -->
+        <trix-editor
+            id="finalSummaryContent"
+            input="final-step-input"
+            class="trix-content block shadow rounded-md border outline-none px-3 py-2 mt-2 w-full border-gray-400 focus:outline-blue-600 min-h-[200px]"
+        ></trix-editor>
+      </div>
     </div>
 
     <!-- DEBUG LIST (ONE AND ONLY) - hidden in production, keep for debugging -->
