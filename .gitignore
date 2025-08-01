@@ -1,0 +1,13 @@
+# Ignore workspace files
+*.code-workspace
+
+# Ignore node_modules if you add frontend packages
+node_modules/
+
+# Ignore logs
+*.log
+
+# Ignore OS junk files
+.DS_Store
+Thumbs.db
+
