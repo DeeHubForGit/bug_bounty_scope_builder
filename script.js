@@ -81,27 +81,27 @@ function setupEventListeners() {
 
 /**
  * Show a specific step and hide others
- * @param {number} index - The index of the step to show
+ * @param {number} stepIndex Index of the step to show
  */
-function showStep(index) {
-  // Validate index
-  if (index < 0 || index >= steps.length) {
-    console.error('Invalid step index:', index);
-    return;
+function showStep(stepIndex) {
+  // Update step visibility
+  for (let i = 0; i < steps.length; i++) {
+    if (steps[i]) {
+      if (i === stepIndex) {
+        steps[i].classList.remove('hidden');
+      } else {
+        steps[i].classList.add('hidden');
+      }
+    }
   }
   
-  // Hide all steps
-  steps.forEach(step => {
-    step.classList.add('hidden');
-  });
+  // Update current step index
+  currentStepIndex = stepIndex;
   
-  // Show the selected step
-  steps[index].classList.remove('hidden');
-  currentStepIndex = index;
-  
-  // Update navigation buttons and UI elements
+  // Update UI elements
   updateNavigationButtons();
   updateStepTracker();
+  updateStepIconsHighlight(stepIndex);
   
   // For debugging
   updateDebugInfo();
@@ -343,6 +343,51 @@ function updateStepTracker() {
     
     stepTracker.appendChild(dot);
   });
+}
+
+/**
+ * Highlight the appropriate step icon based on current step
+ * @param {number} stepIndex Index of the current step
+ */
+function updateStepIconsHighlight(stepIndex) {
+  const rewardsIcon = document.getElementById('rewardsIcon');
+  const summaryIcon = document.getElementById('summaryIcon');
+  const rewardsLabel = document.getElementById('rewardsLabel');
+  const summaryLabel = document.getElementById('summaryLabel');
+  
+  if (rewardsIcon && summaryIcon) {
+    // Clear all highlights first
+    rewardsIcon.classList.remove('ring-2', 'ring-blue-500', 'ring-offset-2');
+    summaryIcon.classList.remove('ring-2', 'ring-blue-500', 'ring-offset-2');
+    
+    // Reset label font weights
+    if (rewardsLabel) {
+      rewardsLabel.classList.remove('font-bold');
+      rewardsLabel.classList.add('font-normal');
+    }
+    
+    if (summaryLabel) {
+      summaryLabel.classList.remove('font-bold');
+      summaryLabel.classList.add('font-normal');
+    }
+    
+    // Add highlight for rewards step (step index 1)
+    if (stepIndex === 1) {
+      rewardsIcon.classList.add('ring-2', 'ring-blue-500', 'ring-offset-2');
+      if (rewardsLabel) {
+        rewardsLabel.classList.remove('font-normal');
+        rewardsLabel.classList.add('font-bold');
+      }
+    }
+    // Add highlight for summary step (step index 2)
+    else if (stepIndex === 2) {
+      summaryIcon.classList.add('ring-2', 'ring-blue-500', 'ring-offset-2');
+      if (summaryLabel) {
+        summaryLabel.classList.remove('font-normal');
+        summaryLabel.classList.add('font-bold');
+      }
+    }
+  }
 }
 
 /**
