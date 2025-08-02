@@ -69,14 +69,7 @@ function setupEventListeners() {
     backButtonBottom.addEventListener('click', goToPreviousStep);
   }
   
-  // Auto start button in the initial step
-  const autoStartButton = document.getElementById('autoStartButton');
-  if (autoStartButton) {
-    autoStartButton.addEventListener('click', () => {
-      // When the auto start button is clicked, go to the next step (rewards step)
-      goToNextStep();
-    });
-  }
+  // Auto start button removed - using top nav buttons instead
 }
 
 /**
@@ -243,37 +236,44 @@ function updateNavigationButtons() {
   const backButtonBottom = document.getElementById('backButtonBottom');
   const nextButtonBottom = document.getElementById('nextButtonBottom');
   
-  // Back buttons
+  // Back buttons - always show, but disable and style differently on initial step
   if (backButton) {
-    if (currentStepIndex > 0) {
-      backButton.classList.remove('hidden');
+    backButton.disabled = (currentStepIndex === 0);
+    
+    // Change style based on disabled state
+    if (currentStepIndex === 0) {
+      backButton.classList.remove('bg-blue-200', 'hover:bg-blue-300');
+      backButton.classList.add('bg-gray-300', 'text-gray-500');
     } else {
-      backButton.classList.add('hidden');
+      backButton.classList.add('bg-blue-200', 'hover:bg-blue-300');
+      backButton.classList.remove('bg-gray-300', 'text-gray-500');
     }
   }
   
   if (backButtonBottom) {
     backButtonBottom.disabled = (currentStepIndex === 0);
     
-    // Also hide the bottom back button on the initial step
+    // Change style based on disabled state
     if (currentStepIndex === 0) {
-      backButtonBottom.classList.add('hidden');
+      backButtonBottom.classList.remove('bg-blue-200', 'hover:bg-blue-300');
+      backButtonBottom.classList.add('bg-gray-300', 'text-gray-500');
     } else {
-      backButtonBottom.classList.remove('hidden');
+      backButtonBottom.classList.add('bg-blue-200', 'hover:bg-blue-300');
+      backButtonBottom.classList.remove('bg-gray-300', 'text-gray-500');
     }
   }
   
-  // Next buttons
+  // Next buttons - always show, but disable on the last step
   if (nextButton) {
-    if (currentStepIndex === 0) {
-      // Hide the top next button on the initial step
-      nextButton.classList.add('hidden');
-    } else if (currentStepIndex < steps.length - 1) {
-      // Show the top next button on middle steps
-      nextButton.classList.remove('hidden');
+    nextButton.disabled = (currentStepIndex === steps.length - 1);
+    
+    // Change style based on disabled state
+    if (currentStepIndex === steps.length - 1) {
+      nextButton.classList.remove('bg-blue-500', 'hover:bg-blue-600');
+      nextButton.classList.add('bg-gray-300', 'text-gray-500');
     } else {
-      // Hide the top next button on the last step
-      nextButton.classList.add('hidden');
+      nextButton.classList.add('bg-blue-500', 'hover:bg-blue-600');
+      nextButton.classList.remove('bg-gray-300', 'text-gray-500');
     }
   }
   
@@ -281,11 +281,13 @@ function updateNavigationButtons() {
     // Disable the button if it's the last step
     nextButtonBottom.disabled = (currentStepIndex === steps.length - 1);
     
-    // Hide the bottom next button on the initial step
-    if (currentStepIndex === 0) {
-      nextButtonBottom.classList.add('hidden');
+    // Change style based on disabled state
+    if (currentStepIndex === steps.length - 1) {
+      nextButtonBottom.classList.remove('bg-blue-500', 'hover:bg-blue-600');
+      nextButtonBottom.classList.add('bg-gray-300', 'text-gray-500');
     } else {
-      nextButtonBottom.classList.remove('hidden');
+      nextButtonBottom.classList.add('bg-blue-500', 'hover:bg-blue-600');
+      nextButtonBottom.classList.remove('bg-gray-300', 'text-gray-500');
     }
   }
 }
