@@ -47,7 +47,8 @@ function setupEventListeners() {
   const nextButton = document.getElementById('nextButton');
   if (nextButton) {
     nextButton.addEventListener('click', goToNextStep);
-    nextButton.classList.remove('hidden');
+    // Don't force visibility here, let updateNavigationButtons handle it
+    // nextButton.classList.remove('hidden');
   }
   
   // Next button in the bottom navigation
@@ -98,8 +99,9 @@ function showStep(index) {
   steps[index].classList.remove('hidden');
   currentStepIndex = index;
   
-  // Update navigation buttons
+  // Update navigation buttons and UI elements
   updateNavigationButtons();
+  updateStepTracker();
   
   // For debugging
   updateDebugInfo();
@@ -209,6 +211,16 @@ function setupRewardTierListeners() {
  */
 function goToNextStep() {
   if (currentStepIndex < steps.length - 1) {
+    // When going from initial step to rewards step, explicitly manage UI elements
+    if (currentStepIndex === 0) {
+      // Hide bug image and show step icons when moving from initial to rewards step
+      const introImageContainer = document.getElementById('introImageContainer');
+      const stepIcons = document.getElementById('stepIcons');
+      
+      if (introImageContainer) introImageContainer.classList.add('hidden');
+      if (stepIcons) stepIcons.classList.remove('hidden');
+    }
+    
     showStep(currentStepIndex + 1);
   }
 }
@@ -242,28 +254,74 @@ function updateNavigationButtons() {
   
   if (backButtonBottom) {
     backButtonBottom.disabled = (currentStepIndex === 0);
+    
+    // Also hide the bottom back button on the initial step
+    if (currentStepIndex === 0) {
+      backButtonBottom.classList.add('hidden');
+    } else {
+      backButtonBottom.classList.remove('hidden');
+    }
   }
   
   // Next buttons
   if (nextButton) {
-    if (currentStepIndex < steps.length - 1) {
+    if (currentStepIndex === 0) {
+      // Hide the top next button on the initial step
+      nextButton.classList.add('hidden');
+    } else if (currentStepIndex < steps.length - 1) {
+      // Show the top next button on middle steps
       nextButton.classList.remove('hidden');
     } else {
+      // Hide the top next button on the last step
       nextButton.classList.add('hidden');
     }
   }
   
   if (nextButtonBottom) {
+    // Disable the button if it's the last step
     nextButtonBottom.disabled = (currentStepIndex === steps.length - 1);
+    
+    // Hide the bottom next button on the initial step
+    if (currentStepIndex === 0) {
+      nextButtonBottom.classList.add('hidden');
+    } else {
+      nextButtonBottom.classList.remove('hidden');
+    }
   }
 }
 
 /**
- * Update the step tracker dots
+ * Update the step tracker dots and manage step UI elements
  */
 function updateStepTracker() {
   const stepTracker = document.getElementById('stepTracker');
+  const introImageContainer = document.getElementById('introImageContainer');
+  const stepIcons = document.getElementById('stepIcons');
+  
   if (!stepTracker) return;
+  
+  // Always keep step tracker hidden - we're not showing dots anymore
+  stepTracker.classList.add('hidden');
+  
+  // Manage UI elements based on the current step
+  if (currentStepIndex === 0) {
+    // On initial step: show bug image, hide icons
+    if (introImageContainer) {
+      introImageContainer.classList.remove('hidden');
+    }
+    if (stepIcons) {
+      stepIcons.classList.add('hidden');
+    }
+    return; // Exit early
+  } else {
+    // On other steps: hide bug image, show icons
+    if (introImageContainer) {
+      introImageContainer.classList.add('hidden');
+    }
+    if (stepIcons) {
+      stepIcons.classList.remove('hidden');
+    }
+  }
   
   // Clear existing dots
   stepTracker.innerHTML = '';
