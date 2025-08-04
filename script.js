@@ -259,38 +259,78 @@ function setupRewardTierListeners() {
   }
 
 /**
+ * Build the full Rewards text for the Scope step (Trix-friendly)
+ */
+function getRewardsTextForScope(formData) {
+    const savedTierKey = localStorage.getItem('selectedRewardTier');
+
+    if (!savedTierKey || !rewards || !rewards.tiers[savedTierKey]) {
+        return `--START REWARDS--<strong>Rewards</strong><br>
+        Please select a reward tier to define your bounty structure.<br>
+        --END REWARDS--`;
+    }
+
+    const tier = rewards.tiers[savedTierKey];
+    const definitions = rewards.definitions || {};
+    const examples = rewards.examples || {};
+
+    let rewardHTML = `
+        <strong>Rewards</strong>
+        We offer bounties based on the severity and impact of the vulnerability:<br>
+    `;
+
+    Object.entries(tier.levels || {}).forEach(([severity, amount]) => {
+        const label = severity.charAt(0).toUpperCase() + severity.slice(1);
+        const def = definitions[severity] || '';
+        const ex = Array.isArray(examples[severity])
+            ? examples[severity].join(', ')
+            : (examples[severity] || '');
+
+        rewardHTML += `
+            <br><strong>${label}: ${amount} – ${def}</strong>
+            ${ex ? `${ex}` : ''}
+        `;
+    });
+
+    rewardHTML += `
+        <br><em>Note: Reports without clear security implications or that require unrealistic attack scenarios will not be rewarded.</em>
+    `;
+
+    // Normalize spacing
+    rewardHTML = rewardHTML
+        .replace(/^\s+/gm, '') // strip indentation
+        .replace(/<br>\s*<br>/g, '<br><br>'); // clean up excess line breaks
+
+    // Remove blank line right after --START REWARDS--
+    return (`--START REWARDS--${rewardHTML}--END REWARDS--`)
+        .replace(/--START REWARDS--\s+/, '--START REWARDS--');
+}
+
+/**
  * Display the scope text in the Trix editor
  */
 function displayScopeText() {
     const finalInput = document.getElementById('final-step-input');
     const finalEditor = document.getElementById('finalScopeContent');
     if (!finalInput || !finalEditor) {
-      console.error('Missing Trix editor elements');
-      return;
+        console.error('Missing Trix editor elements');
+        return;
     }
-  
-    // Get saved values
+
     const savedUrl = localStorage.getItem('enteredUrl') || '(No URL entered)';
-    const savedTierKey = localStorage.getItem('selectedRewardTier');
-    const savedTier = savedTierKey && rewards.tiers[savedTierKey]
-      ? rewards.tiers[savedTierKey].title
-      : '(No reward tier selected)';
-  
-    // Build simple scope HTML
+    const rewardsBlock = getRewardsTextForScope({});
+
     const scopeHTML = `
-      <p><strong>Program URL:</strong> ${savedUrl}</p>
-      <p><strong>Rewards:</strong> ${savedTier}</p>
+<p><strong>Program URL:</strong> ${savedUrl}</p>
+${rewardsBlock}
     `;
-  
-    // Set hidden input so Trix stays in sync
+
     finalInput.value = scopeHTML;
     finalInput.dispatchEvent(new Event('input', { bubbles: true }));
-  
-    // Load into the Trix editor
     finalEditor.editor.loadHTML(scopeHTML);
-  
+
     console.log('✅ Scope text displayed in Trix editor');
-  }
+}
 
 /**
  * Go to the next step
