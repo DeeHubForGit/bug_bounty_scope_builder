@@ -1,0 +1,73 @@
+{
+  "scope_text": [
+    { "type": "paragraph", "text": "<strong>[Your Program Name] Bug Bounty Program</strong><br><br>" },
+    { "type": "paragraph", "text": "<strong>Welcome</strong>" },
+    { "type": "paragraph", "text": "We're excited to invite security researchers from all backgrounds to help us make [Your Organization] a more secure platform for everyone. Your expertise helps us identify vulnerabilities before they can be exploited, and we value your contributions to our security efforts.<br><br>" },
+    { "type": "paragraph", "text": "<strong>Program Scope</strong>" },
+    { "type": "paragraph", "text": "We appreciate reports that can help us improve our security posture. Please review the following details carefully before submitting your findings.<br><br>" },
+    { "type": "paragraph", "text": "--START IN-SCOPE--\n<strong>In-Scope Assets</strong>\n--END IN-SCOPE--" },
+    { "type": "paragraph", "text": "<br><strong>Out-of-Scope Assets</strong>" },
+    {
+      "type": "list",
+      "items": [
+        "Any services hosted by third parties, unless they impact the security of our primary assets.",
+        "Marketing pages (e.g., blog, landing pages).",
+        "Physical offices and infrastructure.",
+        "Employee social media accounts."
+      ]
+    },
+    { "type": "paragraph", "text": "<br><strong>Vulnerabilities We're Interested In</strong>" },
+    {
+      "type": "list",
+      "items": [
+        "Cross-Site Scripting (XSS)",
+        "SQL Injection",
+        "Authentication bypass",
+        "Privilege escalation",
+        "Remote Code Execution (RCE)",
+        "Security misconfigurations",
+        "Server-side request forgery (SSRF)",
+        "[Add other relevant vulnerabilities]"
+      ]
+    },
+    { "type": "paragraph", "text": "<br><strong>Vulnerabilities Out-of-Scope</strong>" },
+    {
+      "type": "list",
+      "items": [
+        "Issues solely affecting outdated browsers",
+        "Missing HTTP security headers (unless they lead to a proven vulnerability)",
+        "Vulnerabilities requiring physical access",
+        "Self-XSS requiring significant user interaction",
+        "Reports from automated tools without clear evidence of impact",
+        "Theoretical vulnerabilities without proof of exploitation"
+      ]
+    },
+    { "type": "paragraph", "text": "<br>--START REWARDS--\n<strong>Rewards</strong>\n--END REWARDS--" },
+    { "type": "paragraph", "text": "<br><strong>Submission Guidelines</strong>" },
+    {
+      "type": "list",
+      "items": [
+        "Provide clear, step-by-step instructions to reproduce the vulnerability",
+        "Include screenshots, videos, or code snippets where possible",
+        "Test only on your own accounts; do not access others' data",
+        "Describe the potential impact and attack scenario",
+        "Be respectful of our users' privacy and our systems' stability"
+      ]
+    },
+    { "type": "paragraph", "text": "<br><strong>Our Commitment</strong>" },
+    {
+      "type": "list",
+      "items": [
+        "We will acknowledge your report within [X] hours/days",
+        "A resolution or update will be provided within [X] business days",
+        "We will keep you informed about the status of your report",
+        "We will recognize your contribution if you wish to be acknowledged"
+      ]
+    },
+    { "type": "paragraph", "text": "<br><strong>Legal Safe Harbor</strong>" },
+    {
+      "type": "paragraph",
+      "text": "This program follows a \"safe harbor\" approach. As long as your research is conducted responsibly and within the program's scope, we consider it authorized. If legal questions arise, we'll work with you to understand and resolve them."
+    }
+  ]
+}
