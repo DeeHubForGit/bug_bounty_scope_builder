@@ -96,13 +96,178 @@ function showStep(stepIndex) {
   updateStepTracker();
   updateStepIconsHighlight(stepIndex);
   
+  // If we're showing the final summary step, update its content
+  if (stepIndex === 2) {
+    updateFinalSummary();
+  }
+  
   // For debugging
   updateDebugInfo();
 }
 
 /**
- * Load rewards data from rewards.json
- * @returns {Promise} Promise resolving with the rewards data
+ * Updates the final summary step with program scope content
+ */
+function updateFinalSummary() {
+  const inputEl = document.getElementById('final-step-input');
+  const trixEditorEl = document.querySelector('trix-editor[input="final-step-input"]');
+  if (!inputEl || !trixEditorEl) return;
+
+  // Get the URL from the input field
+  const urlInput = document.getElementById('url');
+  const url = urlInput ? urlInput.value : '';
+
+  // Make sure we have the template data
+  if (!rewardsData || !rewardsData.template) {
+    console.error('Template data not loaded');
+    return;
+  }
+
+  // Use the template from the JSON file
+  const template = [...rewardsData.template];
+
+  // Find the in-scope marker and inject the URL
+  let inScopeIndex = template.findIndex(item => 
+    item.type === 'paragraph' && 
+    item.text && 
+    item.text.includes('--START IN-SCOPE--')
+  );
+
+  if (inScopeIndex !== -1) {
+    // Insert URL after the in-scope marker
+    template.splice(inScopeIndex + 1, 0, 
+      { type: 'paragraph', text: '🌐 WEBSITE' },
+      { type: 'paragraph', text: `URL: ${url}` }
+    );
+  }
+
+  // Find the rewards section marker and inject rewards content
+  const rewardsBlockText = buildRewardsBlock();
+  const rewardsMarkerIndex = template.findIndex(item => 
+    item.type === 'paragraph' && 
+    item.text && 
+    item.text.includes('--START REWARDS--')
+  );
+
+  if (rewardsMarkerIndex !== -1) {
+    // Insert rewards info after the rewards marker
+    template.splice(rewardsMarkerIndex + 1, 0, 
+      { type: 'paragraph', text: '<strong>Rewards</strong>' },
+      { type: 'paragraph', text: 'We offer bounties based on the severity and impact of the vulnerability:' },
+      { type: 'paragraph', text: getRewardsDescription() }
+    );
+  }
+
+  // Render the template
+  let fullHTML = renderTemplate(template);
+
+  // Push into the Trix editor
+  inputEl.value = fullHTML;
+  inputEl.dispatchEvent(new Event('input', { bubbles: true }));
+  trixEditorEl.editor.loadHTML(fullHTML);
+}
+
+/**
+ * Renders a template array into HTML
+ * @param {Array} template Array of template blocks
+ * @returns {string} HTML string
+ */
+function renderTemplate(template) {
+  let html = '';
+
+  template.forEach(block => {
+    if (block.type === 'paragraph') {
+      const text = block.text || '';
+      
+      // Avoid wrapping paragraphs that already contain markers or full tags
+      if (
+        text.includes('<!--') ||
+        text.trim().startsWith('<p') ||
+        text.trim().startsWith('<div')
+      ) {
+        html += text;
+      } else {
+        html += `<p>${text}</p>`;
+      }
+    }
+
+    if (block.type === 'list') {
+      html += '<ul class="bullet-list">';
+      block.items.forEach(item => {
+        html += `<li>${item}</li>`;
+      });
+      html += '</ul>';
+    }
+  });
+
+  return html;
+}
+
+/**
+ * Builds the rewards block HTML
+ * @returns {string} Formatted rewards block with markers
+ */
+function buildRewardsBlock() {
+  // Check if a reward tier has been selected
+  const selectedTier = localStorage.getItem('selectedRewardTier');
+  
+  // If no reward tier selected, return empty rewards section
+  if (!selectedTier || !rewardsData || !rewardsData.rewards || !rewardsData.rewards.tiers) {
+    return '--START REWARDS--<p><strong>Rewards</strong></p><p>Please select a reward tier to define your bounty structure.</p>--END REWARDS--';
+  }
+  
+  // Start building the rewards HTML
+  const sentence = 'We offer bounties based on the severity and impact of the vulnerability:';
+  const intro = `<p><strong>Rewards</strong></p><p>${sentence}</p><br>`;
+  
+  // Get the rewards description
+  const rewardsDescription = getRewardsDescription();
+  
+  return `--START REWARDS--${intro}${rewardsDescription}--END REWARDS--`;
+}
+
+/**
+ * Gets the rewards description from the selected reward tier
+ * @returns {string} HTML string with rewards description
+ */
+function getRewardsDescription() {
+  // Get the selected reward tier
+  const selectedTier = localStorage.getItem('selectedRewardTier');
+  
+  if (!selectedTier || !rewardsData || !rewardsData.rewards || !rewardsData.rewards.tiers) {
+    return 'Please select a reward tier to define your bounty structure.';
+  }
+  
+  const tier = rewardsData.rewards.tiers[selectedTier];
+  if (!tier) {
+    return 'Please select a reward tier to define your bounty structure.';
+  }
+  
+  // Format rewards based on the selected tier
+  let html = '';
+  
+  // Add tier name and description
+  html += `<strong>${tier.name}</strong><br>`;
+  html += `<p>${tier.description}</p><br>`;
+  
+  // Add severity levels
+  if (tier.levels) {
+    html += '<ul>';
+    tier.levels.forEach(level => {
+      html += `<li><strong>${level.name}: ${level.range}</strong> - ${level.description}</li>`;
+    });
+    html += '</ul>';
+  }
+  
+  // Add note
+  html += '<p class="text-sm italic mt-2"><strong>Note:</strong> These ranges reflect industry averages across all severity levels. Actual bounties should be tailored to your organization\'s specific security needs, risk profile, and budget.</p>';
+  
+  return html;
+}
+
+/**
+ * Load rewards data and template from bug-bounty-document-template.json
+ * @returns {Promise} Promise resolving with the data
  */
 async function loadRewardsData() {
   try {
@@ -111,8 +276,9 @@ async function loadRewardsData() {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
     const templateData = await response.json();
-    // The rewards data is under templateData.rewards
-    rewardsData = templateData.rewards;
+    // Store the full template data, not just rewards
+    rewardsData = templateData;
+    console.log('Template data loaded:', rewardsData);
     return rewardsData;
   } catch (error) {
     console.error('Error loading rewards data:', error);
@@ -125,12 +291,12 @@ async function loadRewardsData() {
  */
 function renderRewardTiers() {
   const rewardTierCards = document.getElementById('rewardTierCards');
-  if (!rewardTierCards || !rewardsData || !rewardsData.tiers) {
+  if (!rewardTierCards || !rewardsData || !rewardsData.rewards || !rewardsData.rewards.tiers) {
     console.error('Cannot render reward tiers: missing elements or data');
     return;
   }
   
-  const tiers = rewardsData.tiers;
+  const tiers = rewardsData.rewards.tiers;
   
   const tierHTML = Object.entries(tiers).map(([key, tier]) => {
     const levels = tier.levels;
@@ -190,8 +356,8 @@ function setupRewardTierListeners() {
       
       // Show reward details if needed
       const tierKey = card.getAttribute('data-tier');
-      if (rewardDetails && tierKey && rewardsData.tiers[tierKey]) {
-        const tier = rewardsData.tiers[tierKey];
+      if (rewardDetails && tierKey && rewardsData.rewards.tiers[tierKey]) {
+        const tier = rewardsData.rewards.tiers[tierKey];
         rewardDetails.innerHTML = `<strong>Selected:</strong> ${tier.title}`;
         rewardDetails.style.display = 'block';
       }
