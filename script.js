@@ -22,6 +22,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // 2. Render available reward tiers
         // 3. Attach all button and UI event listeners
         initializeSteps();
+        setupUrlPersistence(); 
         renderRewardTiers();
         setupEventListeners();
       })
@@ -153,9 +154,9 @@ function showStep(stepIndex) {
   updateStepTracker();
   updateStepIconsHighlight(stepIndex);
   
-  // If we're showing the final summary step, update its content
+  // If we're showing the final scope step, update its content
   if (stepIndex === 2) {
-    //updateFinalSummary();
+    displayScopeText();
   }
   
   // For debugging
@@ -174,6 +175,7 @@ function renderRewardTiers() {
     }
   
     const tiers = rewards.tiers;
+    const savedTier = localStorage.getItem('selectedRewardTier'); // ✅ Restore previous selection
   
     const tierHTML = Object.entries(tiers).map(([key, tier]) => {
       const levels = tier.levels || {};
@@ -185,10 +187,13 @@ function renderRewardTiers() {
           return `<li>${label}: ${amount}</li>`;
         }).join('');
   
+      // Check if this tier was previously selected
+      const isSelected = savedTier === key;
+  
       return `
-        <label class="reward-tier-card block border rounded-md p-4 mb-4 cursor-pointer transition-all duration-200" data-tier="${key}">
+        <label class="reward-tier-card block border rounded-md p-4 mb-4 cursor-pointer transition-all duration-200 ${isSelected ? 'border-blue-500 bg-blue-50' : ''}" data-tier="${key}">
           <div class="flex items-start gap-3">
-            <input type="radio" name="rewardTier" value="${key}" class="mt-1">
+            <input type="radio" name="rewardTier" value="${key}" class="mt-1" ${isSelected ? 'checked' : ''}>
             <div class="w-full">
               <strong class="text-gray-800 text-base">${tier.title}</strong>
               <div class="mt-2 flex flex-col md:flex-row gap-4">
@@ -209,23 +214,17 @@ function renderRewardTiers() {
   
     // Add event listeners to reward tier cards
     setupRewardTierListeners();
-  }  
+  }
 
 /**
  * Set up event listeners for reward tier selection
  */
 function setupRewardTierListeners() {
     const rewardTierCards = document.querySelectorAll('.reward-tier-card');
-    const rewardDetails = document.getElementById('rewardDetails');
-  
-    if (!rewards || !rewards.tiers) {
-      console.error('Cannot set up reward tier listeners: rewards data missing');
-      return;
-    }
-  
+    
     rewardTierCards.forEach(card => {
       const radioInput = card.querySelector('input[type="radio"]');
-  
+      
       card.addEventListener('click', () => {
         // Clear all selections
         rewardTierCards.forEach(c => {
@@ -236,16 +235,62 @@ function setupRewardTierListeners() {
         if (radioInput) radioInput.checked = true;
         card.classList.add('border-blue-500', 'bg-blue-50');
   
-        // Show reward details
+        // Save selection to localStorage
         const tierKey = card.getAttribute('data-tier');
-        if (rewardDetails && tierKey && rewards.tiers[tierKey]) {
-          const tier = rewards.tiers[tierKey];
-          rewardDetails.innerHTML = `<strong>Selected:</strong> ${tier.title}`;
-          rewardDetails.style.display = 'block';
-        }
+        localStorage.setItem('selectedRewardTier', tierKey);
       });
     });
   }  
+
+  function setupUrlPersistence() {
+    const urlInput = document.getElementById('websiteUrl'); // ✅ match the HTML ID
+    if (!urlInput) return;
+  
+    // Restore saved value on load
+    const savedUrl = localStorage.getItem('enteredUrl');
+    if (savedUrl) {
+      urlInput.value = savedUrl;
+    }
+  
+    // Save to localStorage on change
+    urlInput.addEventListener('input', () => {
+      localStorage.setItem('enteredUrl', urlInput.value.trim());
+    });
+  }
+
+/**
+ * Display the scope text in the Trix editor
+ */
+function displayScopeText() {
+    const finalInput = document.getElementById('final-step-input');
+    const finalEditor = document.getElementById('finalScopeContent');
+    if (!finalInput || !finalEditor) {
+      console.error('Missing Trix editor elements');
+      return;
+    }
+  
+    // Get saved values
+    const savedUrl = localStorage.getItem('enteredUrl') || '(No URL entered)';
+    const savedTierKey = localStorage.getItem('selectedRewardTier');
+    const savedTier = savedTierKey && rewards.tiers[savedTierKey]
+      ? rewards.tiers[savedTierKey].title
+      : '(No reward tier selected)';
+  
+    // Build simple scope HTML
+    const scopeHTML = `
+      <p><strong>Program URL:</strong> ${savedUrl}</p>
+      <p><strong>Rewards:</strong> ${savedTier}</p>
+    `;
+  
+    // Set hidden input so Trix stays in sync
+    finalInput.value = scopeHTML;
+    finalInput.dispatchEvent(new Event('input', { bubbles: true }));
+  
+    // Load into the Trix editor
+    finalEditor.editor.loadHTML(scopeHTML);
+  
+    console.log('✅ Scope text displayed in Trix editor');
+  }
 
 /**
  * Go to the next step
@@ -356,7 +401,7 @@ function updateStepTracker() {
         stepIcons.classList.add('hidden');
       }
     } else {
-      // On rewards/summary steps: hide bug image, show icons
+      // On rewards/scope steps: hide bug image, show icons
       if (introImageContainer) {
         introImageContainer.classList.add('hidden');
       }
@@ -372,14 +417,14 @@ function updateStepTracker() {
  */
 function updateStepIconsHighlight(stepIndex) {
   const rewardsIcon = document.getElementById('rewardsIcon');
-  const summaryIcon = document.getElementById('summaryIcon');
+  const scopeIcon = document.getElementById('scopeIcon');
   const rewardsLabel = document.getElementById('rewardsLabel');
-  const summaryLabel = document.getElementById('summaryLabel');
+  const scopeLabel = document.getElementById('scopeLabel');
   
-  if (rewardsIcon && summaryIcon) {
+  if (rewardsIcon && scopeIcon) {
     // Clear all highlights first
     rewardsIcon.classList.remove('ring-2', 'ring-blue-500', 'ring-offset-2');
-    summaryIcon.classList.remove('ring-2', 'ring-blue-500', 'ring-offset-2');
+    scopeIcon.classList.remove('ring-2', 'ring-blue-500', 'ring-offset-2');
     
     // Reset label font weights
     if (rewardsLabel) {
@@ -387,9 +432,9 @@ function updateStepIconsHighlight(stepIndex) {
       rewardsLabel.classList.add('font-normal');
     }
     
-    if (summaryLabel) {
-      summaryLabel.classList.remove('font-bold');
-      summaryLabel.classList.add('font-normal');
+    if (scopeLabel) {
+      scopeLabel.classList.remove('font-bold');
+      scopeLabel.classList.add('font-normal');
     }
     
     // Add highlight for rewards step (step index 1)
@@ -400,12 +445,12 @@ function updateStepIconsHighlight(stepIndex) {
         rewardsLabel.classList.add('font-bold');
       }
     }
-    // Add highlight for summary step (step index 2)
+    // Add highlight for scope step (step index 2)
     else if (stepIndex === 2) {
-      summaryIcon.classList.add('ring-2', 'ring-blue-500', 'ring-offset-2');
-      if (summaryLabel) {
-        summaryLabel.classList.remove('font-normal');
-        summaryLabel.classList.add('font-bold');
+      scopeIcon.classList.add('ring-2', 'ring-blue-500', 'ring-offset-2');
+      if (scopeLabel) {
+        scopeLabel.classList.remove('font-normal');
+        scopeLabel.classList.add('font-bold');
       }
     }
   }
