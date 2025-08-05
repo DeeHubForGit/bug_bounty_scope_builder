@@ -21,8 +21,13 @@ function initializeSteps() {
     // Add steps to the array in the order they should appear
     steps = [builderStep, rewardsStep, finalStep];
     
-    // Show the first step
-    showStep(currentStepIndex);
+    // Restore saved step if available, else show first step
+    const savedStep = localStorage.getItem('currentStepIndex');
+    if (savedStep !== null && steps[parseInt(savedStep)]) {
+        showStep(parseInt(savedStep, 10));
+    } else {
+        showStep(currentStepIndex);
+    }
     
     // Update the step tracker
     updateStepTracker();
@@ -75,6 +80,9 @@ function initializeSteps() {
     
     // Update current step index
     currentStepIndex = stepIndex;
+
+    // Save current step index
+    localStorage.setItem('currentStepIndex', stepIndex);
     
     // Update UI elements
     updateNavigationButtons();

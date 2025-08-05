@@ -1,5 +1,6 @@
 import { initializeSteps, setupEventListeners, registerDisplayScopeText } from './navigation.js';
 import { renderRewardTiers, getRewardsTextForScope } from './rewards.js';
+import { fetchMobileAppDetailsForDomain, fetchApiDetails } from './api.js';
 
 // Data is split into three JSON files:
 // - config.json for app settings
