@@ -1,4 +1,4 @@
-import { initializeSteps, setupEventListeners, registerDisplayScopeText } from './navigation.js';
+import { initializeSteps, setupEventListeners, registerDisplayScopeText, registerFetchMobileApps } from './navigation.js';
 import { renderRewardTiers, getRewardsTextForScope } from './rewards.js';
 import { fetchMobileAppDetailsForDomain, fetchApiDetails } from './api.js';
 
@@ -98,6 +98,61 @@ async function loadAppConfig() {
       localStorage.setItem('enteredUrl', urlInput.value.trim());
     });
   }
+
+  function fetchAndDisplayMobileApps() {
+    const urlInput = document.getElementById('websiteUrl');
+    const enteredUrl = urlInput?.value?.trim() || localStorage.getItem('enteredUrl');
+  
+    if (!enteredUrl) {
+      console.log('ℹ️ No URL entered, skipping mobile apps fetch');
+      return;
+    }
+  
+    fetchMobileAppDetailsForDomain(enteredUrl)
+      .then(mobileData => {
+        if (mobileData && mobileData.suggested_apps) {
+          showMobileAppsMessage(mobileData);
+        } else {
+          console.log('ℹ️ No mobile app data found for domain:', enteredUrl);
+        }
+      })
+      .catch(err => {
+        console.error('❌ Error fetching mobile apps:', err);
+      });
+  }  
+
+  registerFetchMobileApps(fetchAndDisplayMobileApps);
+
+function showMobileAppsMessage(mobileData) {
+  const modal = document.getElementById('messageModal');
+  const modalTitle = document.getElementById('messageModalTitle');
+  const modalBody = document.getElementById('messageModalBody');
+  const closeBtn = document.getElementById('closeMessageModal');
+
+  if (!modal || !modalTitle || !modalBody || !closeBtn) {
+    console.error('⚠️ Message modal elements missing');
+    return;
+  }
+
+  const suggestedApps = mobileData.suggested_apps || [];
+  if (suggestedApps.length === 0) {
+    modalTitle.textContent = 'Mobile Apps';
+    modalBody.textContent = 'No suggested mobile apps found.';
+  } else {
+    const appList = suggestedApps.map(app =>
+      `${app.platform}: ${app.name} (v${app.version || 'unknown'})`
+    ).join(' | ');
+    modalTitle.textContent = 'Suggested Mobile Apps';
+    modalBody.textContent = appList;
+  }
+
+  modal.classList.remove('hidden');
+
+  // Close handler
+  closeBtn.onclick = () => {
+    modal.classList.add('hidden');
+  };
+}
 
 /**
  * Display the scope text in the Trix editor

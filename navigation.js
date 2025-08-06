@@ -2,6 +2,13 @@
 let currentStepIndex = 0;
 let steps = [];
 
+// Callback registered from script.js for mobile apps
+let fetchMobileAppsFn = null;
+
+function registerFetchMobileApps(fn) {
+  fetchMobileAppsFn = fn;
+}
+
 // Callback registered from script.js
 let displayScopeTextFn = null;
 
@@ -98,7 +105,7 @@ function initializeSteps() {
     updateDebugInfo();
   }
 
-  /**
+/**
  * Go to the next step
  */
 function goToNextStep() {
@@ -111,11 +118,16 @@ function goToNextStep() {
         
         if (introImageContainer) introImageContainer.classList.add('hidden');
         if (stepIcons) stepIcons.classList.remove('hidden');
+  
+        // 🔑 Trigger the registered mobile apps fetcher
+        if (typeof fetchMobileAppsFn === 'function') {
+          fetchMobileAppsFn();
+        }
       }
-      
+  
       showStep(currentStepIndex + 1);
     }
-  }
+  }   
   
   /**
    * Go to the previous step
@@ -293,6 +305,7 @@ function goToNextStep() {
     updateStepTracker,
     updateStepIconsHighlight,
     updateDebugInfo,
-    registerDisplayScopeText
+    registerDisplayScopeText,
+    registerFetchMobileApps
   };
   
