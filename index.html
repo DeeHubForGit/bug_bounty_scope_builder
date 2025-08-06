@@ -179,6 +179,16 @@
   >
     <div class="max-w-2xl mx-auto px-4 py-3 flex justify-end items-center">
       <div class="flex items-center gap-2">
+        <!-- Small loading indicator -->
+        <span id="loadingIndicator" class="hidden text-blue-500 text-sm font-medium ml-2">
+          <span class="inline-block align-middle animate-spin mr-1">↻</span>
+          Loading...
+        </span>
+        <button
+          id="viewApiButton"
+          class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 text-sm font-medium"
+        >🔍 API Data
+        </button>
         <button
           id="backButtonBottom"
           class="bg-blue-200 text-blue-800 px-4 py-2 rounded hover:bg-blue-300 text-sm font-medium"
@@ -187,11 +197,6 @@
           id="nextButtonBottom"
           class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 text-sm font-medium"
         >Next ⏵</button>
-        <!-- Small loading indicator -->
-        <span id="loadingIndicator" class="hidden text-blue-500 text-sm font-medium ml-2">
-          <span class="inline-block align-middle animate-spin mr-1">↻</span>
-          Loading...
-        </span>
       </div>
     </div>
   </div>

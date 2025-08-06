@@ -2,11 +2,11 @@
 let currentStepIndex = 0;
 let steps = [];
 
-// Callback registered from script.js for mobile apps
-let fetchMobileAppsFn = null;
+// Callback registered from script.js
+let loadApiDataFn = null;
 
-function registerFetchMobileApps(fn) {
-  fetchMobileAppsFn = fn;
+function registerLoadApiDataFn(fn) {
+  loadApiDataFn = fn;
 }
 
 // Callback registered from script.js
@@ -119,9 +119,9 @@ function goToNextStep() {
         if (introImageContainer) introImageContainer.classList.add('hidden');
         if (stepIcons) stepIcons.classList.remove('hidden');
   
-        // 🔑 Trigger the registered mobile apps fetcher
-        if (typeof fetchMobileAppsFn === 'function') {
-          fetchMobileAppsFn();
+        // Trigger registered background loader
+        if (typeof loadApiDataFn === 'function') {
+            loadApiDataFn();
         }
       }
   
@@ -306,6 +306,6 @@ function goToNextStep() {
     updateStepIconsHighlight,
     updateDebugInfo,
     registerDisplayScopeText,
-    registerFetchMobileApps
+    registerLoadApiDataFn
   };
   
