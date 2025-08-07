@@ -1,6 +1,11 @@
-// api.js — Centralized API calls with hardcoded backend
+// api.js — Centralized API calls
+import { config } from './script.js';
 
-const API_BASE_URL = "http://207.246.87.60:5000";  // Live: http://207.246.87.60:5000  Local: http://localhost:5000
+function getApiBaseUrl() {
+  return config?.apiBasePath?.replace(/\/$/, '') || '';
+}
+
+// Live: http://207.246.87.60:5000  Local: http://localhost:5000
 const API_TIMEOUT = 60_000;
 
 // Shared fetch options
@@ -67,7 +72,7 @@ function fetchWithTimeout(url, options = {}) {
  */
 async function makeApiRequest(endpoint, body) {
   const cleanEndpoint = endpoint.replace(/^\//, "");
-  const url = `${API_BASE_URL}/${cleanEndpoint}`;
+  const url = `${getApiBaseUrl()}/${cleanEndpoint}`;
   console.log(`→ Fetching ${url}`, body);
 
   try {
@@ -380,5 +385,6 @@ export async function fetchApiDetails(domain) {
 // Publicly exported API functions
 export {
   loadApiDataInBackground,
-  showApiResultsPopup
+  showApiResultsPopup, 
+  storedApiData
 };

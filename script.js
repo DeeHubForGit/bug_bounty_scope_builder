@@ -1,6 +1,6 @@
 import { initializeSteps, setupEventListeners, registerLoadApiDataFn, registerDisplayScopeText } from './navigation.js';
 import { renderRewardTiers, getRewardsTextForScope } from './rewards.js';
-import { loadApiDataInBackground } from './api.js';
+import { loadApiDataInBackground, storedApiData } from './api.js';
 
 // Data is split into three JSON files:
 // - config.json for app settings
@@ -38,50 +38,51 @@ document.addEventListener('DOMContentLoaded', () => {
  * @returns {Promise} Promise resolving when all data is loaded
  */
 async function loadAppConfig() {
-    try {
-      // Load all three files in parallel
-      const [scopeRes, rewardsRes, configRes] = await Promise.all([
-        fetch('scope_text.json'),
-        fetch('rewards.json'),
-        fetch('config.json')
-      ]);
-  
-      // Check responses
-      if (!scopeRes.ok) throw new Error(`Scope load failed: ${scopeRes.status}`);
-      if (!rewardsRes.ok) throw new Error(`Rewards load failed: ${rewardsRes.status}`);
-      if (!configRes.ok) throw new Error(`Config load failed: ${configRes.status}`);
-  
-      // Parse JSON
-      let [scopeJson, rewardsJson, configJson] = await Promise.all([
-        scopeRes.json(),
-        rewardsRes.json(),
-        configRes.json()
-      ]);
-  
-      // Unwrap keys for clarity
-      scopeText = scopeJson.scope_text;  // still wrapped
-      rewards   = rewardsJson;           // ✅ already flattened
-      config    = configJson;            // ✅ already flattened
-  
-      // Validate
-      if (!Array.isArray(scopeText)) {
-        throw new Error('Invalid scope_text format — expected an array');
-      }
-      if (!rewards || !rewards.tiers) {
-        throw new Error('Invalid rewards format — missing tiers');
-      }
-      if (!config || typeof config !== 'object') {
-        throw new Error('Invalid config format — expected object');
-      }
-  
-      console.log('✅ Data loaded:', { scopeText, rewards, config });
-      return { scopeText, rewards, config };
-  
-    } catch (error) {
-      console.error('❌ Error loading app data:', error);
-      throw error;
+  try {
+    // Load all three files in parallel
+    const [scopeRes, rewardsRes, configRes] = await Promise.all([
+      fetch('scope_text.json'),
+      fetch('rewards.json'),
+      fetch('config.json')
+    ]);
+
+    // Check responses
+    if (!scopeRes.ok) throw new Error(`Scope load failed: ${scopeRes.status}`);
+    if (!rewardsRes.ok) throw new Error(`Rewards load failed: ${rewardsRes.status}`);
+    if (!configRes.ok) throw new Error(`Config load failed: ${configRes.status}`);
+
+    // Parse JSON
+    let [scopeJson, rewardsJson, configJson] = await Promise.all([
+      scopeRes.json(),
+      rewardsRes.json(),
+      configRes.json()
+    ]);
+
+    // Unwrap keys for clarity
+    scopeText = scopeJson.scope_text;  // still wrapped
+    rewards   = rewardsJson;           // ✅ already flattened
+    config    = configJson;            // ✅ already flattened
+    window.config = config;            // ✅ Expose config globally for use in other modules
+
+    // Validate
+    if (!Array.isArray(scopeText)) {
+      throw new Error('Invalid scope_text format — expected an array');
     }
-  }   
+    if (!rewards || !rewards.tiers) {
+      throw new Error('Invalid rewards format — missing tiers');
+    }
+    if (!config || typeof config !== 'object') {
+      throw new Error('Invalid config format — expected object');
+    }
+
+    console.log('✅ Data loaded:', { scopeText, rewards, config });
+    return { scopeText, rewards, config };
+
+  } catch (error) {
+    console.error('❌ Error loading app data:', error);
+    throw error;
+  }
+}  
 
   function setupUrlPersistence() {
     const urlInput = document.getElementById('websiteUrl'); // ✅ match the HTML ID
@@ -140,3 +141,5 @@ ${rewardsBlock}
 
     console.log('✅ Scope text displayed in Trix editor');
 }
+
+export { config };

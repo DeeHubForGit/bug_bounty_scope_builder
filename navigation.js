@@ -1,3 +1,9 @@
+const StepIndex = Object.freeze({
+    BUILDER: 0,
+    REWARDS: 1,
+    FINAL: 2
+  });  
+  
 // Global state
 let currentStepIndex = 0;
 let steps = [];
@@ -97,10 +103,21 @@ function initializeSteps() {
     updateStepIconsHighlight(stepIndex);
     
     // If we're showing the final scope step, update its content
-    if (stepIndex === 2 && typeof displayScopeTextFn === 'function') {
+    if (stepIndex === StepIndex.FINAL && typeof displayScopeTextFn === 'function') {
         displayScopeTextFn(); // 🔑 call the registered function
     }
     
+    // Show or hide the API Data button only on the rewards step
+    const apiButton = document.getElementById('viewApiButton');
+    if (apiButton) {
+        const showButtonInConfig = window.config?.showApiDataButton;
+        if (stepIndex === StepIndex.REWARDS && showButtonInConfig) {
+            apiButton.classList.remove('hidden');
+        } else {
+            apiButton.classList.add('hidden');
+        }
+    }
+
     // For debugging
     updateDebugInfo();
   }
@@ -111,7 +128,7 @@ function initializeSteps() {
 function goToNextStep() {
     if (currentStepIndex < steps.length - 1) {
       // When going from initial step to rewards step, explicitly manage UI elements
-      if (currentStepIndex === 0) {
+      if (currentStepIndex === StepIndex.BUILDER) {
         // Hide bug image and show step icons when moving from initial to rewards step
         const introImageContainer = document.getElementById('introImageContainer');
         const stepIcons = document.getElementById('stepIcons');
@@ -149,10 +166,10 @@ function goToNextStep() {
     
     // Back buttons - always show, but disable and style differently on initial step
     if (backButton) {
-      backButton.disabled = (currentStepIndex === 0);
+      backButton.disabled = (currentStepIndex === StepIndex.BUILDER);
       
       // Change style based on disabled state
-      if (currentStepIndex === 0) {
+      if (currentStepIndex === StepIndex.BUILDER) {
         backButton.classList.remove('bg-blue-200', 'hover:bg-blue-300');
         backButton.classList.add('bg-gray-300', 'text-gray-500');
       } else {
@@ -162,10 +179,10 @@ function goToNextStep() {
     }
     
     if (backButtonBottom) {
-      backButtonBottom.disabled = (currentStepIndex === 0);
+      backButtonBottom.disabled = (currentStepIndex === StepIndex.BUILDER);
       
       // Change style based on disabled state
-      if (currentStepIndex === 0) {
+      if (currentStepIndex === StepIndex.BUILDER) {
         backButtonBottom.classList.remove('bg-blue-200', 'hover:bg-blue-300');
         backButtonBottom.classList.add('bg-gray-300', 'text-gray-500');
       } else {
@@ -211,7 +228,7 @@ function goToNextStep() {
       const stepIcons = document.getElementById('stepIcons');
     
       // On initial step: show bug image, hide icons
-      if (currentStepIndex === 0) {
+      if (currentStepIndex === StepIndex.BUILDER) {
         if (introImageContainer) {
           introImageContainer.classList.remove('hidden');
         }
@@ -255,16 +272,16 @@ function goToNextStep() {
         scopeLabel.classList.add('font-normal');
       }
       
-      // Add highlight for rewards step (step index 1)
-      if (stepIndex === 1) {
+      // Add highlight for rewards step
+      if (stepIndex === StepIndex.REWARDS) {
         rewardsIcon.classList.add('ring-2', 'ring-blue-500', 'ring-offset-2');
         if (rewardsLabel) {
           rewardsLabel.classList.remove('font-normal');
           rewardsLabel.classList.add('font-bold');
         }
       }
-      // Add highlight for scope step (step index 2)
-      else if (stepIndex === 2) {
+      // Add highlight for scope step
+      else if (stepIndex === StepIndex.FINAL) {
         scopeIcon.classList.add('ring-2', 'ring-blue-500', 'ring-offset-2');
         if (scopeLabel) {
           scopeLabel.classList.remove('font-normal');
