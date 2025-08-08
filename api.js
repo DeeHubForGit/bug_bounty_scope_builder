@@ -30,12 +30,7 @@ const viewApiButton = document.getElementById('viewApiButton');
 if (viewApiButton) {
     viewApiButton.addEventListener('click', () => {
       if (!storedApiData.mobileDetails && !storedApiData.apiDetails && !storedApiData.loading) {
-        const enteredUrl = localStorage.getItem('enteredUrl');
-        if (enteredUrl) {
-          loadApiDataInBackground(enteredUrl).then(() => showApiResultsPopup());
-        } else {
-          showApiResultsPopup();
-        }
+          loadApiDataInBackground().then(() => showApiResultsPopup());
       } else {
         showApiResultsPopup();
       }
@@ -113,8 +108,22 @@ function showGlobalLoadingMessage() {
 * Hide the loading indicator
 */
 function hideGlobalLoadingMessage() {
-  const loadingIndicator = document.getElementById('loadingIndicator');
+  const loadingIndicator = document.getElementById('dataLoadingStatus');
   if (loadingIndicator) loadingIndicator.classList.add('hidden');
+}
+
+function showDataLoadingStatus() {
+  document.getElementById('dataLoadingStatus').innerHTML =
+    `<span class="inline-block animate-spin mr-1">↻</span> Loading…`;
+}
+
+function showDataRetryButton(retryFnName) {
+  document.getElementById('dataLoadingStatus').innerHTML =
+    `<button class="text-blue-500 underline text-sm" onclick="${retryFnName}()">Retry</button>`;
+}
+
+function clearDataStatus() {
+  document.getElementById('dataLoadingStatus').innerHTML = '';
 }
 
 /**
@@ -125,10 +134,10 @@ function setLoadingStateForRewardStep(isLoading) {
   const nextBottom = document.getElementById('nextButtonBottom');
   const backTop    = document.getElementById('backButton');
   const backBottom = document.getElementById('backButtonBottom');
-  const viewData   = document.getElementById('viewDataButton');
-  const apiData    = document.getElementById('apiDataButton');
+  //const viewData   = document.getElementById('viewDataButton');
+  const apiData    = document.getElementById('viewApiButton'); 
 
-  const buttons = [nextTop, nextBottom, backTop, backBottom, viewData, apiData];
+  const buttons = [nextTop, nextBottom, backTop, backBottom, apiData];
 
   buttons.forEach(btn => {
     if (!btn) return;
@@ -139,52 +148,6 @@ function setLoadingStateForRewardStep(isLoading) {
       btn.classList.remove('opacity-50', 'cursor-not-allowed');
     }
   });
-
-  if (nextTop && isLoading) {
-    nextTop.innerHTML = `<span class="inline-block animate-spin mr-1">↻</span> Loading…`;
-  } else if (nextTop) {
-    nextTop.innerHTML = `⏵`;
-  }
-}
-
-// New function for unified data button state handling
-function setDataStatusButtonState(state) {
-  const btn = document.getElementById('dataStatusButton');
-  if (!btn) return;
-
-  btn.disabled = (state === 'loading');
-
-  switch (state) {
-    case 'loading':
-      btn.className = 'bg-gray-400 text-white px-4 py-2 rounded text-sm font-medium cursor-not-allowed';
-      btn.innerHTML = `<span class="inline-block animate-spin mr-1">↻</span> Loading…`;
-      break;
-
-    case 'error':
-      btn.className = 'bg-red-500 text-white px-4 py-2 rounded text-sm font-medium hover:bg-red-600';
-      btn.textContent = 'Retry';
-      btn.onclick = () => {
-        console.log('Retry clicked');
-        setDataStatusButtonState('loading');
-        // 🔹 Call your retry logic here
-      };
-      break;
-
-    case 'success':
-      btn.className = 'bg-green-500 text-white px-4 py-2 rounded text-sm font-medium';
-      btn.textContent = '✅ Data Loaded';
-      btn.onclick = null;
-      break;
-
-    default: // idle
-      btn.className = 'bg-blue-500 text-white px-4 py-2 rounded text-sm font-medium hover:bg-blue-600';
-      btn.textContent = 'Check Data';
-      btn.onclick = () => {
-        console.log('Checking data…');
-        setDataStatusButtonState('loading');
-        // 🔹 Call your data load function here
-      };
-  }
 }
 
 function showApiResultsPopup() {
@@ -310,21 +273,22 @@ function attachRetryButtonHandler(modal) {
   if (retryBtn) {
       retryBtn.addEventListener('click', () => {
           document.body.removeChild(modal);
-          const domain = localStorage.getItem('enteredUrl');
-          if (domain) {
-              loadApiDataInBackground(domain);
-          } else {
-              console.error("Cannot retry: No domain found in storage");
-              showMessageModal("Error", "Cannot retry API loading: No domain information available");
-          }
+              loadApiDataInBackground();
       });
   }
 }
 
 // Function to load API data in the background and handle state updates
-async function loadApiDataInBackground(domain) {
+async function loadApiDataInBackground() {
+  // Resolve domain from the input or localStorage (and keep storage in sync)
+  const domain = (localStorage.getItem('enteredUrl') || '').trim();
+  if (!domain) {
+    console.warn('ℹ️ No domain saved; aborting API load.');
+    return;
+  }
+  
   setLoadingStateForRewardStep(true);        // disable nav + data buttons, show top spinner
-  setDataStatusButtonState('loading');       // ⏳ status button → Loading
+  showDataLoadingStatus();
 
   // Update state to loading
   storedApiData.loading = true;
@@ -354,7 +318,6 @@ async function loadApiDataInBackground(domain) {
         // UI updates
         hideGlobalLoadingMessage();
 
-        setDataStatusButtonState('success'); // ✅ status button → Done
         setLoadingStateForRewardStep(false);
         return;
       } catch (e) {
@@ -391,8 +354,6 @@ async function loadApiDataInBackground(domain) {
 
     // UI updates
     hideGlobalLoadingMessage();
-
-    setDataStatusButtonState('success');     // ✅ status button → Done
     setLoadingStateForRewardStep(false);
 
   } catch (error) {
@@ -409,7 +370,7 @@ async function loadApiDataInBackground(domain) {
     // UI updates
     hideGlobalLoadingMessage();
 
-    setDataStatusButtonState('error');       // ❌ status button → Retry
+    showDataRetryButton();
     setLoadingStateForRewardStep(false);
   }
 }
