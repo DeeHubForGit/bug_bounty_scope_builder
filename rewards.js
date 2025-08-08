@@ -77,52 +77,52 @@ function setupRewardTierListeners() {
     });
   }  
 
-  /**
- * Build the full Rewards text for the Scope step (Trix-friendly)
+/**
+ * Build the full Rewards text for the Scope step (Trix-friendly, no extra blanks)
  */
 function getRewardsTextForScope(rewards) {
-    const savedTierKey = localStorage.getItem('selectedRewardTier');
+  const savedTierKey = localStorage.getItem('selectedRewardTier');
+  const tiers = rewards?.tiers || {};
 
-    if (!savedTierKey || !rewards || !rewards.tiers[savedTierKey]) {
-        return `--START REWARDS--<strong>Rewards</strong><br>
-        Please select a reward tier to define your bounty structure.<br>
-        --END REWARDS--`;
-    }
+  // Base array
+  let lines = [];
 
-    const tier = rewards.tiers[savedTierKey];
-    const definitions = rewards.definitions || {};
-    const examples = rewards.examples || {};
+  // Fallback
+  if (!savedTierKey || !tiers[savedTierKey]) {
+    lines = [
+      '--START REWARDS--<strong>Rewards</strong>',
+      'Please select a reward tier or enter your own rewards to define your bounty structure.',
+      '--END REWARDS--'
+    ];
+    return lines.join('<br>');
+  }
 
-    let rewardHTML = `
-        <strong>Rewards</strong>
-        We offer bounties based on the severity and impact of the vulnerability:<br>
-    `;
+  // Selected tier
+  const tier = tiers[savedTierKey];
+  const defs = rewards.definitions || {};
+  const exs  = rewards.examples || {};
 
-    Object.entries(tier.levels || {}).forEach(([severity, amount]) => {
-        const label = severity.charAt(0).toUpperCase() + severity.slice(1);
-        const def = definitions[severity] || '';
-        const ex = Array.isArray(examples[severity])
-            ? examples[severity].join(', ')
-            : (examples[severity] || '');
+  lines.push('--START REWARDS--<strong>Rewards</strong>');
+  lines.push('We offer bounties based on the severity and impact of the vulnerability:');
 
-        rewardHTML += `
-            <br><strong>${label}: ${amount} – ${def}</strong>
-            ${ex ? `${ex}` : ''}
-        `;
-    });
+  Object.entries(tier.levels || {}).forEach(([severity, amount]) => {
+    const label = severity.charAt(0).toUpperCase() + severity.slice(1);
+    const def   = (defs[severity] || '').trim();
+    const exArr = Array.isArray(exs[severity]) ? exs[severity] : (exs[severity] ? [exs[severity]] : []);
+    const exTxt = exArr.join(', ').trim();
 
-    rewardHTML += `
-        <br><em>Note: Reports without clear security implications or that require unrealistic attack scenarios will not be rewarded.</em>
-    `;
+    let line = `<br><strong>${label}: ${amount}`;
+    if (def) line += ` – ${def}`;
+    line += '</strong>';
+    lines.push(line);
+    if (exTxt) lines.push(exTxt);
+  });
 
-    // Normalize spacing
-    rewardHTML = rewardHTML
-        .replace(/^\s+/gm, '') // strip indentation
-        .replace(/<br>\s*<br>/g, '<br><br>'); // clean up excess line breaks
+  lines.push('<br><em>Note: Reports without clear security implications or that require unrealistic attack scenarios will not be rewarded.</em>');
+  lines.push('--END REWARDS--');
 
-    // Remove blank line right after --START REWARDS--
-    return (`--START REWARDS--${rewardHTML}--END REWARDS--`)
-        .replace(/--START REWARDS--\s+/, '--START REWARDS--');
+  return lines.join('<br>').replace(/(<br>\s*){3,}/g, '<br><br>');
 }
 
 export { renderRewardTiers, setupRewardTierListeners, getRewardsTextForScope };
+
