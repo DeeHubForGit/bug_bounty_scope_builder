@@ -142,4 +142,33 @@ ${rewardsBlock}
     console.log('✅ Scope text displayed in Trix editor');
 }
 
+function clearMemoryForNewUserTest() {
+  localStorage.removeItem('enteredUrl');
+
+  Object.keys(localStorage).forEach(key => {
+    if (key.startsWith('apiData_')) localStorage.removeItem(key);
+  });
+
+  localStorage.removeItem('selectedRewardTier');
+  ['formState','sectionSelections','sectionCounts','currentStepIndex'].forEach(k => localStorage.removeItem(k));
+
+  // reset in-memory store exported from api.js
+  storedApiData.apiDetails = null;
+  storedApiData.mobileDetails = null;
+  storedApiData.error = null;
+  storedApiData.loading = false;
+  storedApiData.isLoading = false;
+
+  const urlInput = document.getElementById('websiteUrl');
+  if (urlInput) urlInput.value = '';
+
+  alert('🧹 Cleared! Simulating first-time user experience.');
+}
+
+// wire up the button
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('clearMemoryBtn')
+    ?.addEventListener('click', clearMemoryForNewUserTest);
+});
+
 export { config };

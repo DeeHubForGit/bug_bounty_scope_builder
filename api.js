@@ -117,24 +117,73 @@ function hideGlobalLoadingMessage() {
   if (loadingIndicator) loadingIndicator.classList.add('hidden');
 }
 
-function updateApiDataButton() {
-  const button = document.getElementById('viewApiButton');
-  if (!button) return;
+/**
+ * Update the loading state for the Next buttons.
+ */
+function setLoadingStateForRewardStep(isLoading) {
+  const nextTop    = document.getElementById('nextButton');
+  const nextBottom = document.getElementById('nextButtonBottom');
+  const backTop    = document.getElementById('backButton');
+  const backBottom = document.getElementById('backButtonBottom');
+  const viewData   = document.getElementById('viewDataButton');
+  const apiData    = document.getElementById('apiDataButton');
 
-  if (storedApiData.loading) {
-      button.className = 'bg-blue-400 text-white px-4 py-2 rounded text-sm font-medium';
-      button.textContent = 'Retrieving...';
-      button.disabled = true;
-  } else if (storedApiData.error) {
-      button.className = 'bg-red-500 text-white px-4 py-2 rounded text-sm font-medium';
-      button.textContent = '⚠️ API Error';
-      button.disabled = false;
-      button.onclick = showApiResultsPopup;
-  } else {
-      button.className = 'bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 text-sm font-medium';
-      button.textContent = '🔍 API Data';
-      button.disabled = false;
-      button.onclick = showApiResultsPopup;
+  const buttons = [nextTop, nextBottom, backTop, backBottom, viewData, apiData];
+
+  buttons.forEach(btn => {
+    if (!btn) return;
+    btn.disabled = isLoading;
+    if (isLoading) {
+      btn.classList.add('opacity-50', 'cursor-not-allowed');
+    } else {
+      btn.classList.remove('opacity-50', 'cursor-not-allowed');
+    }
+  });
+
+  if (nextTop && isLoading) {
+    nextTop.innerHTML = `<span class="inline-block animate-spin mr-1">↻</span> Loading…`;
+  } else if (nextTop) {
+    nextTop.innerHTML = `⏵`;
+  }
+}
+
+// New function for unified data button state handling
+function setDataStatusButtonState(state) {
+  const btn = document.getElementById('dataStatusButton');
+  if (!btn) return;
+
+  btn.disabled = (state === 'loading');
+
+  switch (state) {
+    case 'loading':
+      btn.className = 'bg-gray-400 text-white px-4 py-2 rounded text-sm font-medium cursor-not-allowed';
+      btn.innerHTML = `<span class="inline-block animate-spin mr-1">↻</span> Loading…`;
+      break;
+
+    case 'error':
+      btn.className = 'bg-red-500 text-white px-4 py-2 rounded text-sm font-medium hover:bg-red-600';
+      btn.textContent = 'Retry';
+      btn.onclick = () => {
+        console.log('Retry clicked');
+        setDataStatusButtonState('loading');
+        // 🔹 Call your retry logic here
+      };
+      break;
+
+    case 'success':
+      btn.className = 'bg-green-500 text-white px-4 py-2 rounded text-sm font-medium';
+      btn.textContent = '✅ Data Loaded';
+      btn.onclick = null;
+      break;
+
+    default: // idle
+      btn.className = 'bg-blue-500 text-white px-4 py-2 rounded text-sm font-medium hover:bg-blue-600';
+      btn.textContent = 'Check Data';
+      btn.onclick = () => {
+        console.log('Checking data…');
+        setDataStatusButtonState('loading');
+        // 🔹 Call your data load function here
+      };
   }
 }
 
@@ -274,6 +323,9 @@ function attachRetryButtonHandler(modal) {
 
 // Function to load API data in the background and handle state updates
 async function loadApiDataInBackground(domain) {
+  setLoadingStateForRewardStep(true);        // disable nav + data buttons, show top spinner
+  setDataStatusButtonState('loading');       // ⏳ status button → Loading
+
   // Update state to loading
   storedApiData.loading = true;
   storedApiData.isLoading = true;
@@ -281,7 +333,6 @@ async function loadApiDataInBackground(domain) {
 
   // Show loading indicators
   showGlobalLoadingMessage();
-  updateApiDataButton();
 
   try {
     console.log("Loading API data in background for domain:", domain);
@@ -300,13 +351,15 @@ async function loadApiDataInBackground(domain) {
         storedApiData.isLoading = false;
         storedApiData.error = null;
 
-        // Hide loading message and update the button state
+        // UI updates
         hideGlobalLoadingMessage();
-        updateApiDataButton();
+
+        setDataStatusButtonState('success'); // ✅ status button → Done
+        setLoadingStateForRewardStep(false);
         return;
       } catch (e) {
         console.warn("Error parsing saved API data, fetching fresh data", e);
-        // Continue with fetching fresh data
+        // fall through to fresh fetch
       }
     }
 
@@ -327,21 +380,20 @@ async function loadApiDataInBackground(domain) {
     console.log("- Mobile API response:", mobileRes);
     console.log("- API Details response:", apiRes);
 
-    // Save the API data to localStorage for persistence
+    // Persist to localStorage
     try {
-      const dataToSave = {
-        mobileDetails: mobileRes,
-        apiDetails: apiRes
-      };
+      const dataToSave = { mobileDetails: mobileRes, apiDetails: apiRes };
       localStorage.setItem(`apiData_${domain}`, JSON.stringify(dataToSave));
       console.log("API data saved to localStorage for domain:", domain);
     } catch (saveError) {
       console.error("Error saving API data to localStorage:", saveError);
     }
 
-    // Hide loading message and update the button state
+    // UI updates
     hideGlobalLoadingMessage();
-    updateApiDataButton();
+
+    setDataStatusButtonState('success');     // ✅ status button → Done
+    setLoadingStateForRewardStep(false);
 
   } catch (error) {
     console.error("Error fetching API data in background:", error);
@@ -354,9 +406,11 @@ async function loadApiDataInBackground(domain) {
       details: "Please check that the API server is running and accessible."
     };
 
-    // Hide loading message and update button state
+    // UI updates
     hideGlobalLoadingMessage();
-    updateApiDataButton();
+
+    setDataStatusButtonState('error');       // ❌ status button → Retry
+    setLoadingStateForRewardStep(false);
   }
 }
 

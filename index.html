@@ -66,6 +66,9 @@
                   class="bg-blue-500 text-white px-3 py-2 rounded hover:bg-blue-600 text-sm font-medium">
             ⏵
           </button>
+          <button id="dataStatusButton" class="bg-blue-500 text-white px-4 py-2 rounded text-sm font-medium">
+            Check Data
+          </button>          
         </div>
       </div>
     </div>
@@ -129,7 +132,7 @@
           </div>
         </div>
 
-        <p class="text-sm text-gray-600 mb-4">Choose a tier or write your own reward structure.</p>
+        <p class="text-sm text-gray-600 mb-4">Choose a tier here or go to “Scope” to define your own reward structure.</p>
 
         <div id="rewardTierCards">
           <!-- Reward tier cards will be dynamically inserted here -->
@@ -180,10 +183,14 @@
     <div class="max-w-2xl mx-auto px-4 py-3 flex justify-end items-center">
       <div class="flex items-center gap-2">
         <!-- Small loading indicator -->
-        <span id="loadingIndicator" class="hidden text-blue-500 text-sm font-medium ml-2">
-          <span class="inline-block align-middle animate-spin mr-1">↻</span>
-          Loading...
-        </span>
+        <button id="clearMemoryBtn" class="text-sm text-red-700 hover:underline ml-2">
+          🧹 Clear Memory (Temp)
+        </button>              
+        <button
+          id="viewDataButton"
+          class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 text-sm font-medium"
+        >🔍 View Data
+        </button>
         <button
           id="viewApiButton"
           class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 text-sm font-medium"

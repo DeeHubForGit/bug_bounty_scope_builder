@@ -107,6 +107,16 @@ function initializeSteps() {
         displayScopeTextFn(); // 🔑 call the registered function
     }
     
+    // Show/hide the View Data button
+    const dataButton = document.getElementById('viewDataButton');
+    if (dataButton) {
+        if (stepIndex === StepIndex.REWARDS && config?.showViewDataButton) {
+            dataButton.classList.remove('hidden');
+        } else {
+            dataButton.classList.add('hidden');
+        }
+    }
+
     // Show or hide the API Data button only on the rewards step
     const apiButton = document.getElementById('viewApiButton');
     if (apiButton) {
@@ -145,7 +155,7 @@ function goToNextStep() {
       showStep(currentStepIndex + 1);
     }
   }   
-  
+
   /**
    * Go to the previous step
    */
