@@ -13,25 +13,32 @@ let rewards = null;
 
 // Run this once the DOM is fully loaded
 document.addEventListener('DOMContentLoaded', () => {
-    // Load all required app config (settings, scope text, rewards) 
-    // before setting up the wizard interface
-    loadAppConfig()
-      .then(() => {
-        // After data is loaded:
-        // 1. Initialize step navigation
-        // 2. Render available reward tiers
-        // 3. Attach all button and UI event listeners
-        registerDisplayScopeText(displayScopeText);
-        renderRewardTiers(rewards);
-        initializeSteps();
-        setupUrlPersistence(); 
-        setupEventListeners();
-      })
-      .catch(error => {
-        // If initialization fails, log the error for debugging
-        console.error('Error initializing app:', error);
-      });
-  });  
+  // Load all required app config (settings, scope text, rewards)
+  // before setting up the wizard interface
+  loadAppConfig()
+    .then(() => {
+      // After data is loaded:
+      // A) Restore any cached API data first so Scope has mobiles/APIs immediately if available
+      loadDataFromLocalStorage();
+
+      // B) If a domain exists and cached API data is missing, preload it in the background now
+      fetchApiDataOnStartup();
+
+      // C) Initialise the UI
+      // 1. Initialize step navigation
+      // 2. Render available reward tiers
+      // 3. Attach all button and UI event listeners
+      registerDisplayScopeText(displayScopeText);
+      renderRewardTiers(rewards);
+      initializeSteps();
+      setupUrlPersistence();
+      setupEventListeners();
+    })
+    .catch(error => {
+      // If initialization fails, log the error for debugging
+      console.error('Error initializing app:', error);
+    });
+}); 
 
 /**
  * Load config, scope text, and rewards from separate JSON files
@@ -84,21 +91,93 @@ async function loadAppConfig() {
   }
 }  
 
-  function setupUrlPersistence() {
-    const urlInput = document.getElementById('websiteUrl'); // ✅ match the HTML ID
-    if (!urlInput) return;
-  
-    // Restore saved value on load
-    const savedUrl = localStorage.getItem('enteredUrl');
-    if (savedUrl) {
-      urlInput.value = savedUrl;
+/**
+ * Read and parse a JSON object from localStorage.
+ * Returns null if the key does not exist or parsing fails.
+ */
+function readJSONFromLocalStorage(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Load any stored API data from localStorage into storedApiData.
+ * This restores cached mobile app details and API details from previous runs.
+ */
+function loadDataFromLocalStorage() {
+  if (!window.storedApiData) return;
+
+  let mobileDetails = null;
+  let apiDetails = null;
+
+  for (const key of Object.keys(localStorage)) {
+    if (!key.startsWith('apiData_')) continue;
+    const value = readJSONFromLocalStorage(key);
+    if (!value) continue;
+
+    const lowerKey = key.toLowerCase();
+    if (!mobileDetails && (lowerKey.includes('mobile') || lowerKey.includes('mobiledetails'))) {
+      mobileDetails = value;
     }
-  
-    // Save to localStorage on change
-    urlInput.addEventListener('input', () => {
-      localStorage.setItem('enteredUrl', urlInput.value.trim());
+    if (!apiDetails && (lowerKey.includes('api') || lowerKey.includes('apidetails'))) {
+      apiDetails = value;
+    }
+  }
+
+  if (mobileDetails) storedApiData.mobileDetails = mobileDetails;
+  if (apiDetails) storedApiData.apiDetails = apiDetails;
+
+  // Reset loading flags
+  storedApiData.loading = false;
+  storedApiData.isLoading = false;
+
+  if (mobileDetails || apiDetails) {
+    console.log('♻️ Loaded API data from localStorage', {
+      mobileDetails: !!mobileDetails,
+      apiDetails: !!apiDetails
     });
   }
+}
+
+/**
+ * Fetch missing API data in the background on startup.
+ * This runs if we have a saved domain and there is no cached data yet.
+ */
+function fetchApiDataOnStartup() {
+  const domain = (localStorage.getItem('enteredUrl') || '').trim();
+  if (!domain) return;
+
+  const needsMobileData = !storedApiData.mobileDetails;
+  const needsApiData = !storedApiData.apiDetails;
+
+  if (needsMobileData || needsApiData) {
+    if (!storedApiData.loading) {
+      loadApiDataInBackground(domain)
+        .then(() => console.log('🔄 Preloaded API data on startup'))
+        .catch(err => console.warn('Preload failed (non-blocking):', err));
+    }
+  }
+}
+
+function setupUrlPersistence() {
+  const urlInput = document.getElementById('websiteUrl'); // ✅ match the HTML ID
+  if (!urlInput) return;
+
+  // Restore saved value on load
+  const savedUrl = localStorage.getItem('enteredUrl');
+  if (savedUrl) {
+    urlInput.value = savedUrl;
+  }
+
+  // Save to localStorage on change
+  urlInput.addEventListener('input', () => {
+    localStorage.setItem('enteredUrl', urlInput.value.trim());
+  });
+}
 
 // API
 function handleLoadApiData() {
@@ -139,26 +218,173 @@ function getScopeTextFromJSON() {
   return html.trim();
 }
 
+/**
+ * Helper: Format the website URL in the same format as manual mode
+ */
+function formatWebsiteDataForSummary(domain) {
+  if (!domain) return '';
+  const lines = ['🌐 WEBSITE'];
+  lines.push(`<strong>URL:</strong> ${domain}`);
+  return `<div class="mb-2">${lines.join('<br>')}</div>`;
+}
+
+/**
+ * Helper: Format mobile app data in the same format as manual mode
+ */
+function formatMobileDataForSummary(mobileDetails) {
+  if (!mobileDetails) return '';
+  
+  // Array to collect all mobile app entries
+  const appEntries = [];
+  
+  // Process main app - use suggested app(s) if available
+  if (Array.isArray(mobileDetails.suggested_apps) && mobileDetails.suggested_apps.length > 0) {
+    const appName = mobileDetails.suggested_name || mobileDetails.suggested_apps[0].name;
+    let hasIOS = false;
+    let hasAndroid = false;
+    
+    // Process iOS platform
+    const iosApp = mobileDetails.suggested_apps.find(app => app.platform === 'iOS');
+    if (iosApp) {
+      hasIOS = true;
+      const lines = ['📱MOBILE APP'];
+      lines.push(`<strong>App Name:</strong> ${appName}`);
+      lines.push(`<strong>Platform:</strong> Apple: ${iosApp.url}`);
+      lines.push(`<strong>Version:</strong> Current`);
+      appEntries.push(`<div class="mb-2">${lines.join('<br>')}</div>`);
+    }
+    
+    // Process Android platform
+    const androidApp = mobileDetails.suggested_apps.find(app => app.platform === 'Android');
+    if (androidApp) {
+      hasAndroid = true;
+      const lines = ['📱MOBILE APP'];
+      lines.push(`<strong>App Name:</strong> ${appName}`);
+      lines.push(`<strong>Platform:</strong> Android: ${androidApp.url}`);
+      lines.push(`<strong>Version:</strong> Current`);
+      appEntries.push(`<div class="mb-2">${lines.join('<br>')}</div>`);
+    }
+    
+    // If no platforms were found, create a generic entry
+    if (!hasIOS && !hasAndroid && mobileDetails.suggested_apps.length > 0) {
+      const lines = ['📱MOBILE APP'];
+      lines.push(`<strong>App Name:</strong> ${appName}`);
+      lines.push(`<strong>Version:</strong> Current`);
+      appEntries.push(`<div class="mb-2">${lines.join('<br>')}</div>`);
+    }
+  }
+  
+  // Process alternative apps
+  if (mobileDetails.alternatives) {
+    // Process iOS alternatives
+    if (Array.isArray(mobileDetails.alternatives.iOS)) {
+      mobileDetails.alternatives.iOS.forEach(app => {
+        const lines = ['📱MOBILE APP'];
+        lines.push(`<strong>App Name:</strong> ${app.name}`);
+        lines.push(`<strong>Platform:</strong> Apple: ${app.url}`);
+        lines.push(`<strong>Version:</strong> Current`);
+        appEntries.push(`<div class="mb-2">${lines.join('<br>')}</div>`);
+      });
+    }
+    
+    // Process Android alternatives
+    if (Array.isArray(mobileDetails.alternatives.Android)) {
+      mobileDetails.alternatives.Android.forEach(app => {
+        const lines = ['📱MOBILE APP'];
+        lines.push(`<strong>App Name:</strong> ${app.name}`);
+        lines.push(`<strong>Platform:</strong> Android: ${app.url}`);
+        lines.push(`<strong>Version:</strong> Current`);
+        appEntries.push(`<div class="mb-2">${lines.join('<br>')}</div>`);
+      });
+    }
+  }
+  
+  // Use the same spacing approach as extractSectionHTML
+  return appEntries
+    .map((entry, idx) => (idx > 0 ? '<div class="mb-2">&nbsp;</div>' + entry : entry))
+    .join('');
+}
+
+/**
+ * Helper: format the stored API data in the same format as manual mode
+ * "🧩API" HTML snippet
+ */
+function formatApiDataForSummary(apiData) {
+  if (!apiData) return '';
+  
+  // Check if there's any meaningful API data
+  const hasApiUrl = apiData.suggestedApi || (Array.isArray(apiData.apiUrls) && apiData.apiUrls.length > 0);
+  const hasDocUrl = Array.isArray(apiData.documentationUrls) && apiData.documentationUrls.length > 0;
+  
+  // If no meaningful API data exists, return empty string to prevent showing just the heading
+  if (!hasApiUrl && !hasDocUrl) {
+    return '';
+  }
+  
+  const lines = ['🧩API'];
+
+  if (apiData.suggestedApi) {
+    lines.push(`<strong>URL:</strong> ${apiData.suggestedApi}`);
+  } else if (Array.isArray(apiData.apiUrls) && apiData.apiUrls.length) {
+    lines.push(`<strong>URL:</strong> ${apiData.apiUrls[0]}`);
+  }
+  
+  if (Array.isArray(apiData.documentationUrls) && apiData.documentationUrls.length) {
+    lines.push(`<strong>Documentation:</strong> ${apiData.documentationUrls[0]}`);
+  }
+
+  return `<div class="mb-2">${lines.join('<br>')}</div>`;
+}
+
+// Build the In‑Scope Assets block for the Scope editor
+function buildAssetsBlockForScope() {
+  // Use the same URL you already store for scope
+  const domain = (localStorage.getItem('enteredUrl') || '').trim();
+
+  // Reuse your existing helpers (from your “old code”)
+  const websitesHTML = domain ? formatWebsiteDataForSummary(domain) : '';
+  const mobilesHTML  = formatMobileDataForSummary(storedApiData.mobileDetails);
+  const apisHTML     = formatApiDataForSummary(storedApiData.apiDetails);
+
+  // Mirror spacing logic used elsewhere
+  const sections = [];
+  if (websitesHTML) sections.push(websitesHTML);
+  if (mobilesHTML)  sections.push(mobilesHTML);
+  if (apisHTML)     sections.push(apisHTML);
+
+  const assetsContent = sections
+    .map((block, idx) => (idx > 0 ? '<div class="mb-2">&nbsp;</div>' + block : block))
+    .join('');
+
+  return [
+    '--START IN-SCOPE--',
+    '<p><strong>In-Scope Assets</strong></p>',
+    assetsContent,
+    '\n--END IN-SCOPE--'
+  ].join('');
+}
+
 function replaceBlockByMarker(existingHTML, sectionName, replacementBlock) {
-  const startMarker = `--START ${sectionName.toUpperCase()}--`;
-  const endMarker = `--END ${sectionName.toUpperCase()}--`;
+  const name = sectionName.toUpperCase();
+  const start = `--START ${name}--`;
+  const end   = `--END ${name}--`;
 
-  const startIndex = existingHTML.indexOf(startMarker);
-  const endIndex = existingHTML.indexOf(endMarker);
+  // Match the marker block, optionally wrapped in a single <p> ... </p>
+  const pattern = new RegExp(
+    `(?:<p>)?\\s*${start}[\\s\\S]*?${end}\\s*(?:</p>)?`,
+    'i'
+  );
 
-  if (startIndex === -1 || endIndex === -1 || endIndex < startIndex) {
+  if (!pattern.test(existingHTML)) {
     console.warn(`⚠️ Missing markers for "${sectionName}"`);
     return existingHTML;
   }
 
-  const before = existingHTML.slice(0, startIndex).trimEnd();
-  const after = existingHTML.slice(endIndex + endMarker.length).trimStart();
-
-  return `${before}${replacementBlock}${after}`;
+  return existingHTML.replace(pattern, replacementBlock);
 }
 
 /**
- * Display the scope text in the Trix editor
+ * Display the scope text in the Trix editor (with Assets + Rewards injected)
  */
 function displayScopeText() {
   const finalInput  = document.getElementById('final-step-input');
@@ -168,27 +394,25 @@ function displayScopeText() {
     return;
   }
 
-  const savedUrl = (localStorage.getItem('enteredUrl') || '').trim();
-  const programUrlHTML = `<p><strong>Program URL:</strong> ${savedUrl || '(No URL entered)'}</p>`;
-
   // 1) Base template from JSON
   const templateHTML = getScopeTextFromJSON();
 
-  // 2) Build rewards block (includes START/END markers) and ensure header is on a new line
-  let rewardsBlock = getRewardsTextForScope(rewards);
+  // 2) Build blocks
+  const assetsBlock  = buildAssetsBlockForScope();
+  const rewardsBlock = getRewardsTextForScope(rewards); // already has <br> after START marker
 
-  // 3) Inject rewards into the template at the marker
-  let scopeHTML = replaceBlockByMarker(templateHTML, 'REWARDS', rewardsBlock);
+  // 3) Inject into template markers
+  let scopeHTML = replaceBlockByMarker(templateHTML, 'IN-SCOPE', assetsBlock);
+  scopeHTML     = replaceBlockByMarker(scopeHTML,   'REWARDS',  rewardsBlock);
 
-  // 4) Append Program URL after the template
-  scopeHTML = `${scopeHTML}\n${programUrlHTML}`;
+  // (No extra Program URL line here to avoid duplicate URL; it’s inside In‑Scope → WEBSITE)
 
-  // 5) Render
+  // 4) Render
   finalInput.value = scopeHTML;
   finalInput.dispatchEvent(new Event('input', { bubbles: true }));
   finalEditor.editor.loadHTML(scopeHTML);
 
-  console.log('✅ Scope text displayed in Trix editor (rewards injected with line break)');
+  console.log('✅ Scope text displayed in Trix editor (assets + rewards injected)');
 }
 
 function clearMemoryForNewUserTest() {
