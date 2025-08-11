@@ -40,6 +40,13 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 }); 
 
+/*document.addEventListener('DOMContentLoaded', () => {
+  setTimeout(() => {
+    console.log('[init] running ensureCopyButton() after DOMContentLoaded');
+    ensureCopyButton();
+  }, 1000); // small delay to let steps render
+});
+*/
 /**
  * Load config, scope text, and rewards from separate JSON files
  * @returns {Promise} Promise resolving when all data is loaded
@@ -406,11 +413,13 @@ function replaceBlockByMarker(existingHTML, sectionName, replacementBlock) {
  */
 function displayScopeText() {
   const finalInput  = document.getElementById('final-step-input');
-  const finalEditor = document.getElementById('finalScopeContent');
+  const finalEditor = document.getElementById('finalSummaryContent');
   if (!finalInput || !finalEditor || !finalEditor.editor) {
     console.error('Missing Trix editor elements');
     return;
   }
+  // TEMP: Add the copy button in here.  This will be restructured.
+  addCopyButton();
 
   // 1) Base template from JSON
   const templateHTML = getScopeTextFromJSON();
@@ -431,6 +440,93 @@ function displayScopeText() {
   finalEditor.editor.loadHTML(scopeHTML);
 
   console.log('✅ Scope text displayed in Trix editor (assets + rewards injected)');
+}
+
+// Attach a 📋 Copy button to the *final scope* Trix editor toolbar
+function addCopyButton() {
+  const editor = document.getElementById('finalSummaryContent');
+  if (!editor) {
+    console.warn('[addCopyButton] No editor found yet');
+    return;
+  }
+
+  const toolbar = editor.toolbarElement;
+  if (!toolbar) {
+    console.warn('[addCopyButton] No toolbar found yet');
+    return;
+  }
+
+  const fileGroup = toolbar.querySelector('[data-trix-button-group="file-tools"]');
+  if (!fileGroup) {
+    console.warn('[addCopyButton] No file-tools group found');
+    return;
+  }
+
+  // remove any old copy-button so we don't double-up
+  const old = fileGroup.querySelector('#copyButton');
+  if (old) old.remove();
+
+  const btn = document.createElement('button');
+  btn.type      = 'button';
+  btn.id        = 'copyButton';
+  btn.title     = 'Copy to Clipboard';
+  btn.className = 'trix-button copy-button';
+  btn.innerHTML = '📋 Copy';
+  btn.addEventListener('click', copyFinalSummary);
+
+  fileGroup.appendChild(btn);
+  console.log('[addCopyButton] Copy button added');
+}
+
+function showMessageModal(title, message) {
+  const modal = document.getElementById('messageModal');
+  const titleEl = document.getElementById('messageModalTitle');
+  const bodyEl = document.getElementById('messageModalBody');
+  const closeBtn = document.getElementById('closeMessageModal');
+
+  titleEl.textContent = title || 'Notice';
+  bodyEl.textContent = message || '';
+  modal.classList.remove('hidden');
+
+  closeBtn.onclick = () => {
+    modal.classList.add('hidden');
+  };
+}
+
+// Copy button 
+function copyFinalSummary() {
+  const content = document.getElementById('finalSummaryContent'); 
+  if (!content) return;
+
+  // Get the rendered HTML
+  let html = content.innerHTML;
+
+  // Strip visible markers
+  html = html.replace(/--START [\w-]+--/g, '');
+  html = html.replace(/--END [\w-]+--/g, '');
+
+  // Use a temp element to select and copy the cleaned HTML
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = html;
+  document.body.appendChild(tempDiv);
+
+  const range = document.createRange();
+  range.selectNodeContents(tempDiv);
+  const selection = window.getSelection();
+  selection.removeAllRanges();
+  selection.addRange(range);
+
+  try {
+    document.execCommand('copy');
+    if (typeof showMessageModal === 'function') {
+      showMessageModal("Copied!", "Formatted content copied to clipboard.");
+    }
+  } catch (err) {
+    console.error('Copy failed:', err);
+  }
+
+  document.body.removeChild(tempDiv);
+  window.getSelection().removeAllRanges();
 }
 
 function clearMemoryForNewUserTest() {
