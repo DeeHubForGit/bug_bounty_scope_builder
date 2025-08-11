@@ -96,9 +96,7 @@ async function makeApiRequest(endpoint, body) {
   }
 }
 
-/**
- * Show the loading indicator near the Next button
- */
+// Show the loading indicator near the nav buttons
 function showGlobalLoadingMessage() {
   const el = document.getElementById('dataLoadingStatus');
   if (!el) return;
@@ -106,9 +104,7 @@ function showGlobalLoadingMessage() {
   el.innerHTML = `<span class="inline-block animate-spin mr-1">↻</span> Loading…`;
 }
 
-/**
-* Hide the loading indicator
-*/
+// Hide the loading indicator
 function hideGlobalLoadingMessage() {
   const el = document.getElementById('dataLoadingStatus');
   if (!el) return;
@@ -116,9 +112,54 @@ function hideGlobalLoadingMessage() {
   el.innerHTML = '';
 }
 
-function showDataRetryButton(retryFnName) {
-  document.getElementById('dataLoadingStatus').innerHTML =
-    `<button class="text-blue-500 underline text-sm" onclick="${retryFnName}()">Retry</button>`;
+// Inline “Retry” control next to the arrows
+function showDataRetryButton(domainOrOptions, maybeErrorMsg, maybeRetryFnName) {
+  // # support both call styles
+  let domain = '', errorMsg = '', retryFnName = 'handleLoadApiData';
+  if (typeof domainOrOptions === 'object' && domainOrOptions) {
+    domain = domainOrOptions.domain || '';
+    errorMsg = domainOrOptions.errorMsg || '';
+    retryFnName = domainOrOptions.retryFnName || 'handleLoadApiData';
+  } else {
+    domain = domainOrOptions || '';
+    errorMsg = maybeErrorMsg || '';
+    retryFnName = maybeRetryFnName || 'handleLoadApiData';
+  }
+
+  // # fallbacks
+  if (!domain) domain = (localStorage.getItem('enteredUrl') || localStorage.getItem('autoModeDomain') || '').trim() || 'this site';
+  if (!errorMsg && storedApiData?.error) {
+    errorMsg = `${storedApiData.error.message || 'Unknown error'}${storedApiData.error.details ? ' — ' + storedApiData.error.details : ''}`;
+  }
+
+  const el = document.getElementById('dataLoadingStatus');
+  if (!el) return;
+
+  // # safe tooltip html
+  const safeError = String(errorMsg || 'Unknown error')
+    .replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+    .replace(/\n/g,'<br>');
+
+  el.classList.remove('hidden');
+  el.innerHTML = `
+    <button type="button"
+      class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium"
+      onclick="${retryFnName}()">
+      ↻ Retry
+    </button>
+
+    <span class="ml-2 text-gray-600 inline-flex items-center gap-1">
+      Error occurred retrieving mobiles and API for <span class="font-medium">${domain}</span>
+
+      <!-- match Rewards tooltip pattern -->
+      <div class="relative ml-1">
+        <span class="text-blue-500 cursor-pointer text-sm group">ℹ️
+          <span class="absolute left-full top-1/2 ml-2 -translate-y-1/2 w-72 bg-blue-100 text-black text-sm rounded-lg shadow-lg p-3 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10 border border-blue-300">
+            ${safeError}
+          </span>
+        </span>
+      </div>
+    </span>`;
 }
 
 /**
@@ -275,14 +316,15 @@ function attachRetryButtonHandler(modal) {
 
 // Function to load API data in the background and handle state updates
 async function loadApiDataInBackground() {
-  // Resolve domain from the input or localStorage (and keep storage in sync)
+  // Resolve domain from saved value
   const domain = (localStorage.getItem('enteredUrl') || '').trim();
   if (!domain) {
     console.warn('ℹ️ No domain saved; aborting API load.');
     return;
   }
 
-  setLoadingStateForRewardStep(true);        // disable nav + data buttons, show top spinner
+  // Disable nav + data changes while loading
+  setLoadingStateForRewardStep(true);
 
   // Update state to loading
   storedApiData.loading = true;
@@ -295,77 +337,90 @@ async function loadApiDataInBackground() {
   try {
     console.log("Loading API data in background for domain:", domain);
 
-    // Check if we already have saved data for this domain
+    // If we have cached data for this domain, use it
     const savedData = localStorage.getItem(`apiData_${domain}`);
     if (savedData) {
       try {
-        const parsedData = JSON.parse(savedData);
-        console.log("Found saved API data for domain:", domain);
-
-        // Use saved data
-        storedApiData.mobileDetails = parsedData.mobileDetails;
-        storedApiData.apiDetails = parsedData.apiDetails;
+        const parsed = JSON.parse(savedData);
+        storedApiData.mobileDetails = parsed.mobileDetails || null;
+        storedApiData.apiDetails = parsed.apiDetails || null;
         storedApiData.loading = false;
         storedApiData.isLoading = false;
         storedApiData.error = null;
-
-        // UI updates
         hideGlobalLoadingMessage();
-
         setLoadingStateForRewardStep(false);
         return;
-      } catch (e) {
-        console.warn("Error parsing saved API data, fetching fresh data", e);
-        // fall through to fresh fetch
+      } catch {
+        // Fall through to fresh fetch
       }
     }
 
-    // Make API calls in parallel
+    // Fetch both in parallel
     const [mobileRes, apiRes] = await Promise.all([
       fetchMobileAppDetailsForDomain(domain),
       fetchApiDetails(domain)
     ]);
 
-    // Store API responses
-    storedApiData.mobileDetails = mobileRes;
-    storedApiData.apiDetails = apiRes;
+    const mobileError = mobileRes && mobileRes.error;
+    const apiError    = apiRes && apiRes.error;
+
+    // If both calls failed, surface a visible error + retry
+    if (mobileError && apiError) {
+      storedApiData.loading = false;
+      storedApiData.isLoading = false;
+      storedApiData.error = {
+        message: (mobileRes.message || apiRes.message || 'Failed to retrieve program data'),
+        details: (mobileRes.details || apiRes.details || 'Please try again.'),
+        timestamp: Date.now()
+      };
+
+      hideGlobalLoadingMessage();
+      setLoadingStateForRewardStep(false);
+      showDataRetryButton({ domain, errorMsg: `${storedApiData.error.message} — ${storedApiData.error.details}` });
+      return;
+    }
+
+    // At least one succeeded — persist whatever we got
+    storedApiData.mobileDetails = mobileError ? null : mobileRes;
+    storedApiData.apiDetails    = apiError ? null : apiRes;
     storedApiData.loading = false;
     storedApiData.isLoading = false;
     storedApiData.error = null;
 
-    console.log("Background API loading complete:");
-    console.log("- Mobile API response:", mobileRes);
-    console.log("- API Details response:", apiRes);
-
-    // Persist to localStorage
+    // Save successful/partial results
     try {
-      const dataToSave = { mobileDetails: mobileRes, apiDetails: apiRes };
-      localStorage.setItem(`apiData_${domain}`, JSON.stringify(dataToSave));
-      console.log("API data saved to localStorage for domain:", domain);
+      localStorage.setItem(
+        `apiData_${domain}`,
+        JSON.stringify({ mobileDetails: storedApiData.mobileDetails, apiDetails: storedApiData.apiDetails })
+      );
     } catch (saveError) {
       console.error("Error saving API data to localStorage:", saveError);
     }
 
-    // UI updates
     hideGlobalLoadingMessage();
     setLoadingStateForRewardStep(false);
 
+    // If one piece failed, still show retry (non-blocking) so user can try to complete the set
+    if (mobileError || apiError) {
+      const msg = (mobileError ? (mobileRes.message || 'Mobile fetch failed') : '') +
+                  (mobileError && apiError ? ' | ' : '') +
+                  (apiError ? (apiRes.message || 'API fetch failed') : '');
+      showDataRetryButton({ domain, errorMsg: msg });
+    }
+
   } catch (error) {
     console.error("Error fetching API data in background:", error);
-
-    // Update error state
     storedApiData.loading = false;
     storedApiData.isLoading = false;
     storedApiData.error = {
       message: `Failed to load API data: ${error.message}`,
-      details: "Please check that the API server is running and accessible."
+      details: "Please check that the API server is running and accessible.",
+      timestamp: Date.now()
     };
 
-    // UI updates
     hideGlobalLoadingMessage();
-
-    showDataRetryButton();
     setLoadingStateForRewardStep(false);
+    showDataRetryButton({ domain, errorMsg: `${storedApiData.error.message} — ${storedApiData.error.details}` });
   }
 }
 
