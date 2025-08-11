@@ -116,30 +116,79 @@ function handleLoadApiData() {
 // Register function so it can be used by navigation
 registerLoadApiDataFn(handleLoadApiData);
 
+function getScopeTextFromJSON() {
+  if (!Array.isArray(scopeText)) {
+      console.error('❌ scopeText is not loaded or not an array');
+      return '';
+  }
+
+  let html = '';
+
+  scopeText.forEach(block => {
+      if (block.type === 'paragraph') {
+          html += `<p>${block.text}</p>`;
+      } else if (block.type === 'list' && Array.isArray(block.items)) {
+          html += '<ul>';
+          block.items.forEach(item => {
+              html += `<li>${item}</li>`;
+          });
+          html += '</ul>';
+      }
+  });
+
+  return html.trim();
+}
+
+function replaceBlockByMarker(existingHTML, sectionName, replacementBlock) {
+  const startMarker = `--START ${sectionName.toUpperCase()}--`;
+  const endMarker = `--END ${sectionName.toUpperCase()}--`;
+
+  const startIndex = existingHTML.indexOf(startMarker);
+  const endIndex = existingHTML.indexOf(endMarker);
+
+  if (startIndex === -1 || endIndex === -1 || endIndex < startIndex) {
+    console.warn(`⚠️ Missing markers for "${sectionName}"`);
+    return existingHTML;
+  }
+
+  const before = existingHTML.slice(0, startIndex).trimEnd();
+  const after = existingHTML.slice(endIndex + endMarker.length).trimStart();
+
+  return `${before}${replacementBlock}${after}`;
+}
+
 /**
  * Display the scope text in the Trix editor
  */
 function displayScopeText() {
-    const finalInput = document.getElementById('final-step-input');
-    const finalEditor = document.getElementById('finalScopeContent');
-    if (!finalInput || !finalEditor) {
-        console.error('Missing Trix editor elements');
-        return;
-    }
+  const finalInput  = document.getElementById('final-step-input');
+  const finalEditor = document.getElementById('finalScopeContent');
+  if (!finalInput || !finalEditor || !finalEditor.editor) {
+    console.error('Missing Trix editor elements');
+    return;
+  }
 
-    const savedUrl = localStorage.getItem('enteredUrl') || '(No URL entered)';
-    const rewardsBlock = getRewardsTextForScope(rewards);
+  const savedUrl = (localStorage.getItem('enteredUrl') || '').trim();
+  const programUrlHTML = `<p><strong>Program URL:</strong> ${savedUrl || '(No URL entered)'}</p>`;
 
-    const scopeHTML = `
-<p><strong>Program URL:</strong> ${savedUrl}</p>
-${rewardsBlock}
-    `;
+  // 1) Base template from JSON
+  const templateHTML = getScopeTextFromJSON();
 
-    finalInput.value = scopeHTML;
-    finalInput.dispatchEvent(new Event('input', { bubbles: true }));
-    finalEditor.editor.loadHTML(scopeHTML);
+  // 2) Build rewards block (includes START/END markers) and ensure header is on a new line
+  let rewardsBlock = getRewardsTextForScope(rewards);
 
-    console.log('✅ Scope text displayed in Trix editor');
+  // 3) Inject rewards into the template at the marker
+  let scopeHTML = replaceBlockByMarker(templateHTML, 'REWARDS', rewardsBlock);
+
+  // 4) Append Program URL after the template
+  scopeHTML = `${scopeHTML}\n${programUrlHTML}`;
+
+  // 5) Render
+  finalInput.value = scopeHTML;
+  finalInput.dispatchEvent(new Event('input', { bubbles: true }));
+  finalEditor.editor.loadHTML(scopeHTML);
+
+  console.log('✅ Scope text displayed in Trix editor (rewards injected with line break)');
 }
 
 function clearMemoryForNewUserTest() {

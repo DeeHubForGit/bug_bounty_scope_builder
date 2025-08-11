@@ -84,13 +84,12 @@ function getRewardsTextForScope(rewards) {
   const savedTierKey = localStorage.getItem('selectedRewardTier');
   const tiers = rewards?.tiers || {};
 
-  // Base array
   let lines = [];
 
-  // Fallback
+  // Fallback (no tier selected)
   if (!savedTierKey || !tiers[savedTierKey]) {
     lines = [
-      '--START REWARDS--<strong>Rewards</strong>',
+      '--START REWARDS--<br><strong>Rewards</strong>',
       'Please select a reward tier or enter your own rewards to define your bounty structure.',
       '--END REWARDS--'
     ];
@@ -102,7 +101,7 @@ function getRewardsTextForScope(rewards) {
   const defs = rewards.definitions || {};
   const exs  = rewards.examples || {};
 
-  lines.push('--START REWARDS--<strong>Rewards</strong>');
+  lines.push('--START REWARDS--<br><strong>Rewards</strong>');
   lines.push('We offer bounties based on the severity and impact of the vulnerability:');
 
   Object.entries(tier.levels || {}).forEach(([severity, amount]) => {
@@ -115,12 +114,14 @@ function getRewardsTextForScope(rewards) {
     if (def) line += ` – ${def}`;
     line += '</strong>';
     lines.push(line);
+
     if (exTxt) lines.push(exTxt);
   });
 
   lines.push('<br><em>Note: Reports without clear security implications or that require unrealistic attack scenarios will not be rewarded.</em>');
   lines.push('--END REWARDS--');
 
+  // Collapse any accidental triple breaks
   return lines.join('<br>').replace(/(<br>\s*){3,}/g, '<br><br>');
 }
 
