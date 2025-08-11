@@ -148,34 +148,49 @@ function loadDataFromLocalStorage() {
  * This runs if we have a saved domain and there is no cached data yet.
  */
 function fetchApiDataOnStartup() {
-  const domain = (localStorage.getItem('enteredUrl') || '').trim();
-  if (!domain) return;
+  const raw = (localStorage.getItem('enteredUrl') || '').trim();
+  if (!raw) return;
 
+  const domain = extractDomain(raw);  // <- normalise here
   const needsMobileData = !storedApiData.mobileDetails;
   const needsApiData = !storedApiData.apiDetails;
 
-  if (needsMobileData || needsApiData) {
-    if (!storedApiData.loading) {
-      loadApiDataInBackground(domain)
-        .then(() => console.log('🔄 Preloaded API data on startup'))
-        .catch(err => console.warn('Preload failed (non-blocking):', err));
+  if ((needsMobileData || needsApiData) && !storedApiData.loading) {
+    loadApiDataInBackground(domain)
+      .then(() => console.log('🔄 Preloaded API data on startup'))
+      .catch(err => console.warn('Preload failed (non-blocking):', err));
+  }
+}
+
+function extractDomain(input) {
+  try {
+    let hostname;
+
+    if (input.startsWith('http://') || input.startsWith('https://')) {
+      hostname = new URL(input).hostname;
+    } else {
+      hostname = input.replace(/^https?:\/\//, '').split('/')[0];
     }
+
+    // Lowercase and strip leading www.
+    return hostname.toLowerCase().replace(/^www\./, '');
+  } catch {
+    return (input || '').trim().toLowerCase().replace(/^www\./, '');
   }
 }
 
 function setupUrlPersistence() {
-  const urlInput = document.getElementById('websiteUrl'); // ✅ match the HTML ID
+  const urlInput = document.getElementById('websiteUrl');
   if (!urlInput) return;
 
-  // Restore saved value on load
+  // Restore saved value on load (already normalised if we saved it that way)
   const savedUrl = localStorage.getItem('enteredUrl');
-  if (savedUrl) {
-    urlInput.value = savedUrl;
-  }
+  if (savedUrl) urlInput.value = savedUrl;
 
-  // Save to localStorage on change
+  // Save normalised value on change
   urlInput.addEventListener('input', () => {
-    localStorage.setItem('enteredUrl', urlInput.value.trim());
+    const normalised = extractDomain(urlInput.value);
+    localStorage.setItem('enteredUrl', normalised);
   });
 }
 
@@ -183,13 +198,16 @@ function setupUrlPersistence() {
 function handleLoadApiData() {
   const urlInput = document.getElementById('websiteUrl');
   const enteredUrl = urlInput?.value?.trim() || localStorage.getItem('enteredUrl');
-  
   if (!enteredUrl) {
     console.log('ℹ️ No URL entered, skipping API data load');
     return;
   }
 
-  loadApiDataInBackground(enteredUrl);
+  const domain = extractDomain(enteredUrl);  // <- normalise here too
+  // Persist the normalised value so Scope/Assets use the same
+  localStorage.setItem('enteredUrl', domain);
+
+  loadApiDataInBackground(domain);
 }
 
 // Register function so it can be used by navigation

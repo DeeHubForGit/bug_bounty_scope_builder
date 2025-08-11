@@ -100,30 +100,25 @@ async function makeApiRequest(endpoint, body) {
  * Show the loading indicator near the Next button
  */
 function showGlobalLoadingMessage() {
-  const loadingIndicator = document.getElementById('loadingIndicator');
-  if (loadingIndicator) loadingIndicator.classList.remove('hidden');
+  const el = document.getElementById('dataLoadingStatus');
+  if (!el) return;
+  el.classList.remove('hidden');
+  el.innerHTML = `<span class="inline-block animate-spin mr-1">↻</span> Loading…`;
 }
 
 /**
 * Hide the loading indicator
 */
 function hideGlobalLoadingMessage() {
-  const loadingIndicator = document.getElementById('dataLoadingStatus');
-  if (loadingIndicator) loadingIndicator.classList.add('hidden');
-}
-
-function showDataLoadingStatus() {
-  document.getElementById('dataLoadingStatus').innerHTML =
-    `<span class="inline-block animate-spin mr-1">↻</span> Loading…`;
+  const el = document.getElementById('dataLoadingStatus');
+  if (!el) return;
+  el.classList.add('hidden');
+  el.innerHTML = '';
 }
 
 function showDataRetryButton(retryFnName) {
   document.getElementById('dataLoadingStatus').innerHTML =
     `<button class="text-blue-500 underline text-sm" onclick="${retryFnName}()">Retry</button>`;
-}
-
-function clearDataStatus() {
-  document.getElementById('dataLoadingStatus').innerHTML = '';
 }
 
 /**
@@ -286,9 +281,8 @@ async function loadApiDataInBackground() {
     console.warn('ℹ️ No domain saved; aborting API load.');
     return;
   }
-  
+
   setLoadingStateForRewardStep(true);        // disable nav + data buttons, show top spinner
-  showDataLoadingStatus();
 
   // Update state to loading
   storedApiData.loading = true;
