@@ -542,6 +542,19 @@ function copyFinalSummary() {
   window.getSelection().removeAllRanges();
 }
 
+function clearRewardsSelection() {
+  const rewardTierCards = document.querySelectorAll('.reward-tier-card');
+
+  rewardTierCards.forEach(card => {
+    const radioInput = card.querySelector('input[type="radio"]');
+    if (radioInput) radioInput.checked = false;
+
+    card.classList.remove('border-blue-500', 'bg-blue-50');
+  });
+
+  localStorage.removeItem('selectedRewardTier');
+}
+
 function clearMemoryForNewUserTest() {
   localStorage.removeItem('enteredUrl');
 
@@ -551,6 +564,8 @@ function clearMemoryForNewUserTest() {
 
   localStorage.removeItem('selectedRewardTier');
   ['formState','sectionSelections','sectionCounts','currentStepIndex'].forEach(k => localStorage.removeItem(k));
+  
+  clearRewardsSelection();  // Ensures no default is selected
 
   // reset in-memory store exported from api.js
   storedApiData.apiDetails = null;

@@ -77,40 +77,33 @@ function setupRewardTierListeners() {
     });
   }  
 
-/**
- * Build the full Rewards text for the Scope step (Trix-friendly, no extra blanks)
- */
-function getRewardsTextForScope(rewards) {
-  const savedTierKey = localStorage.getItem('selectedRewardTier');
+function buildRewardsTextFromTier(tierKey, rewards, options = {}) {
+  const { stripAmounts = false } = options;
   const tiers = rewards?.tiers || {};
-
-  let lines = [];
-
-  // Fallback (no tier selected)
-  if (!savedTierKey || !tiers[savedTierKey]) {
-    lines = [
-      '--START REWARDS--<br><strong>Rewards</strong>',
-      'Please select a reward tier or enter your own rewards to define your bounty structure.',
-      '--END REWARDS--'
-    ];
-    return lines.join('<br>');
-  }
-
-  // Selected tier
-  const tier = tiers[savedTierKey];
+  const tier = tiers[tierKey];
   const defs = rewards.definitions || {};
   const exs  = rewards.examples || {};
+
+  if (!tier) return '';
+
+  let lines = [];
 
   lines.push('--START REWARDS--<br><strong>Rewards</strong>');
   lines.push('We offer bounties based on the severity and impact of the vulnerability:');
 
   Object.entries(tier.levels || {}).forEach(([severity, amount]) => {
     const label = severity.charAt(0).toUpperCase() + severity.slice(1);
-    const def   = (defs[severity] || '').trim();
+    const def = (defs[severity] || '').trim();
     const exArr = Array.isArray(exs[severity]) ? exs[severity] : (exs[severity] ? [exs[severity]] : []);
     const exTxt = exArr.join(', ').trim();
 
-    let line = `<br><strong>${label}: ${amount}`;
+    let displayAmount = amount;
+    if (stripAmounts) {
+      displayAmount = '$[Lower Range]–$[Upper Range]';
+    }
+
+    let line = `<br><strong>${label}`;
+    if (displayAmount) line += `: ${displayAmount}`;
     if (def) line += ` – ${def}`;
     line += '</strong>';
     lines.push(line);
@@ -121,8 +114,24 @@ function getRewardsTextForScope(rewards) {
   lines.push('<br><em>Note: Reports without clear security implications or that require unrealistic attack scenarios will not be rewarded.</em>');
   lines.push('--END REWARDS--');
 
-  // Collapse any accidental triple breaks
   return lines.join('<br>').replace(/(<br>\s*){3,}/g, '<br><br>');
+}  
+
+/**
+ * Build the full Rewards text for the Scope step (Trix-friendly, no extra blanks)
+ */
+function getRewardsTextForScope(rewards) {
+  const savedTierKey = localStorage.getItem('selectedRewardTier');
+  const tiers = rewards?.tiers || {};
+  const fallbackTierKey = Object.keys(tiers)[0];  // Use first tier as fallback
+
+  // If no selection, use fallback with amounts stripped
+  if (!savedTierKey || !tiers[savedTierKey]) {
+    return buildRewardsTextFromTier(fallbackTierKey, rewards, { stripAmounts: true });
+  }
+
+  // Otherwise, use selected tier with amounts
+  return buildRewardsTextFromTier(savedTierKey, rewards);
 }
 
 export { renderRewardTiers, setupRewardTierListeners, getRewardsTextForScope };
