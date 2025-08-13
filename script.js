@@ -11,6 +11,8 @@ let config = null;
 let scopeText = null;
 let rewards = null;
 
+let __didFetchApiDataOnStartup = false;
+
 // Run this once the DOM is fully loaded
 document.addEventListener('DOMContentLoaded', () => {
   // Load all required app config (settings, scope text, rewards)
@@ -155,6 +157,9 @@ function loadDataFromLocalStorage() {
  * This runs if we have a saved domain and there is no cached data yet.
  */
 function fetchApiDataOnStartup() {
+  if (__didFetchApiDataOnStartup) return;              // guard
+  __didFetchApiDataOnStartup = true;
+
   const raw = (localStorage.getItem('enteredUrl') || '').trim();
   if (!raw) return;
 

@@ -114,7 +114,7 @@ function hideGlobalLoadingMessage() {
 
 // Inline “Retry” control next to the arrows
 function showDataRetryButton(domainOrOptions, maybeErrorMsg, maybeRetryFnName) {
-  // # support both call styles
+  // support both call styles
   let domain = '', errorMsg = '', retryFnName = 'handleLoadApiData';
   if (typeof domainOrOptions === 'object' && domainOrOptions) {
     domain = domainOrOptions.domain || '';
@@ -126,7 +126,7 @@ function showDataRetryButton(domainOrOptions, maybeErrorMsg, maybeRetryFnName) {
     retryFnName = maybeRetryFnName || 'handleLoadApiData';
   }
 
-  // # fallbacks
+  // fallbacks
   if (!domain) domain = (localStorage.getItem('enteredUrl') || localStorage.getItem('autoModeDomain') || '').trim() || 'this site';
   if (!errorMsg && storedApiData?.error) {
     errorMsg = `${storedApiData.error.message || 'Unknown error'}${storedApiData.error.details ? ' — ' + storedApiData.error.details : ''}`;
@@ -135,7 +135,21 @@ function showDataRetryButton(domainOrOptions, maybeErrorMsg, maybeRetryFnName) {
   const el = document.getElementById('dataLoadingStatus');
   if (!el) return;
 
-  // # safe tooltip html
+  // 🔹 Build precise one‑liner based on which retrieval failed
+  const mobileFailed = !!storedApiData?.mobileError;
+  const apiFailed    = !!storedApiData?.apiError;
+  let lineMsg;
+  if (mobileFailed && apiFailed) {
+    lineMsg = `Error occurred retrieving mobile apps and API for ${domain}`;
+  } else if (mobileFailed) {
+    lineMsg = `Error occurred retrieving mobile apps for ${domain}`;
+  } else if (apiFailed) {
+    lineMsg = `Error occurred retrieving API details for ${domain}`;
+  } else {
+    lineMsg = `Error occurred retrieving program data for ${domain}`;
+  }
+
+  // safe tooltip html
   const safeError = String(errorMsg || 'Unknown error')
     .replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
     .replace(/\n/g,'<br>');
@@ -149,9 +163,7 @@ function showDataRetryButton(domainOrOptions, maybeErrorMsg, maybeRetryFnName) {
     </button>
 
     <span class="ml-2 text-gray-600 inline-flex items-center gap-1">
-      Error occurred retrieving mobiles and API for <span class="font-medium">${domain}</span>
-
-      <!-- match Rewards tooltip pattern -->
+      ${lineMsg}
       <div class="relative ml-1">
         <span class="text-blue-500 cursor-pointer text-sm group">ℹ️
           <span class="absolute left-full top-1/2 ml-2 -translate-y-1/2 w-72 bg-blue-100 text-black text-sm rounded-lg shadow-lg p-3 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10 border border-blue-300">
@@ -330,6 +342,8 @@ async function loadApiDataInBackground() {
   storedApiData.loading = true;
   storedApiData.isLoading = true;
   storedApiData.error = null;
+  storedApiData.mobileError = null;
+  storedApiData.apiError = null;
 
   // Show loading indicators
   showGlobalLoadingMessage();
@@ -347,6 +361,8 @@ async function loadApiDataInBackground() {
         storedApiData.loading = false;
         storedApiData.isLoading = false;
         storedApiData.error = null;
+        storedApiData.mobileError = null;
+        storedApiData.apiError = null;
         hideGlobalLoadingMessage();
         setLoadingStateForRewardStep(false);
         return;
@@ -361,28 +377,44 @@ async function loadApiDataInBackground() {
       fetchApiDetails(domain)
     ]);
 
-    const mobileError = mobileRes && mobileRes.error;
-    const apiError    = apiRes && apiRes.error;
+    // Determine failures
+    const mobileError = !!(mobileRes && mobileRes.error);
+    const apiError    = !!(apiRes && apiRes.error);
 
     // If both calls failed, surface a visible error + retry
     if (mobileError && apiError) {
+      const mobileReason = mobileRes?.message || mobileRes?.error || "Failed to fetch";
+      const apiReason    = apiRes?.message || apiRes?.error || "Failed to fetch";
+
+      storedApiData.mobileError = mobileReason; // <-- set for inline message
+      storedApiData.apiError    = apiReason;    // <-- set for inline message
+
       storedApiData.loading = false;
       storedApiData.isLoading = false;
       storedApiData.error = {
-        message: (mobileRes.message || apiRes.message || 'Failed to retrieve program data'),
-        details: (mobileRes.details || apiRes.details || 'Please try again.'),
+        message: `Error occurred retrieving mobile apps and API for ${domain}.`,
+        details: `Mobile: ${mobileReason}  API: ${apiReason}`,
         timestamp: Date.now()
       };
 
       hideGlobalLoadingMessage();
       setLoadingStateForRewardStep(false);
-      showDataRetryButton({ domain, errorMsg: `${storedApiData.error.message} — ${storedApiData.error.details}` });
+      showDataRetryButton({ domain, errorMsg: storedApiData.error.details });
       return;
     }
 
     // At least one succeeded — persist whatever we got
     storedApiData.mobileDetails = mobileError ? null : mobileRes;
     storedApiData.apiDetails    = apiError ? null : apiRes;
+
+    // ✅ set specific error strings for partial failures (so inline line is precise)
+    storedApiData.mobileError = mobileError
+      ? (mobileRes?.message || mobileRes?.error || "Failed to fetch")
+      : null;
+    storedApiData.apiError = apiError
+      ? (apiRes?.message || apiRes?.error || "Failed to fetch")
+      : null;
+
     storedApiData.loading = false;
     storedApiData.isLoading = false;
     storedApiData.error = null;
@@ -400,12 +432,12 @@ async function loadApiDataInBackground() {
     hideGlobalLoadingMessage();
     setLoadingStateForRewardStep(false);
 
-    // If one piece failed, still show retry (non-blocking) so user can try to complete the set
+    // If one piece failed, still show inline retry with precise message
     if (mobileError || apiError) {
-      const msg = (mobileError ? (mobileRes.message || 'Mobile fetch failed') : '') +
-                  (mobileError && apiError ? ' | ' : '') +
-                  (apiError ? (apiRes.message || 'API fetch failed') : '');
-      showDataRetryButton({ domain, errorMsg: msg });
+      const parts = [];
+      if (mobileError) parts.push(`Mobile: ${storedApiData.mobileError}`);
+      if (apiError) parts.push(`API: ${storedApiData.apiError}`);
+      showDataRetryButton({ domain, errorMsg: parts.join('  ') });
     }
 
   } catch (error) {
