@@ -22,13 +22,10 @@
 <body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
   <div class="bg-white shadow-lg rounded-lg border border-gray-200 p-8 pb-16 w-full max-w-2xl relative">
     <h1 class="text-3xl font-bold text-gray-800 mb-2">Create a Bug Bounty Program Scope</h1>
-    <p class="text-gray-600 mb-4">Answer the question below to define your program.</p>
+    <p class="text-gray-600 mb-4">Answer the questions below to define your program.</p>
 
     <!-- STEP TRACKER + NAV BUTTONS -->
     <div class="">
-      <div id="introImageContainer" class="flex items-center px-2 min-h-[60px]">
-        <img id="introImage" src="images/bug.png" alt="Bug Bounty Illustration" class="h-10" />
-      </div>
       <!-- Step Icons with Labels -->
       <div id="stepIcons" class="flex items-start gap-4 mb-4 hidden">
         <!-- Rewards Box -->
@@ -72,7 +69,7 @@
     </div>
     <!-- END STEP TRACKER + NAV BUTTONS -->
 
-    <!-- INITIAL BUILDER SELECTION -->
+    <!-- PAGE 1: URL + REWARDS (Rewards moved under URL) -->
     <div id="builderContainer" class="question-step min-h-[350px]">
       <!-- Use negative margin to perfectly align with main title -->
       <div class="-ml-8">
@@ -101,49 +98,49 @@
           <h3 class="font-semibold text-gray-700 mb-2">API Search Results:</h3>
           <div id="autoResultsContent" class="bg-gray-50 p-3 rounded border text-sm overflow-auto max-h-80"></div>
         </div>
+
+        <!-- Rewards under URL (same markup, now on Page 1) -->
+        <div id="rewards-step" class="question-step min-h-[200px] pl-8 pt-4">
+          <div class="flex items-center gap-2 mb-1">
+            <label class="text-lg font-semibold text-gray-800">
+              💵 Reward Tiers
+            </label>
+            <div class="relative">
+              <span class="text-blue-500 cursor-pointer text-sm group">
+                ℹ️
+                <span class="absolute left-full top-1/2 ml-2 -translate-y-1/2 w-72 bg-blue-100 text-black text-sm rounded-lg shadow-lg p-3 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10 border border-blue-300">
+                  A clear reward structure helps researchers understand the value of different findings and incentivises quality reports.<br><br>
+                  <strong>Consider:</strong><br>
+                  • Program budget<br>
+                  • Asset criticality<br>
+                  • Vulnerability impact<br>
+                  • Industry standards<br>
+                  • Report quality
+                </span>
+              </span>
+            </div>
+          </div>
+
+          <p class="text-sm text-gray-600 mb-4">Choose a tier here or go to “Scope” to define your own reward structure.</p>
+
+          <div id="rewardTierCards">
+            <!-- Reward tier cards will be dynamically inserted here -->
+          </div>
+
+          <p class="text-sm text-gray-600 mt-4 italic">
+            <strong>Note:</strong> These ranges reflect industry averages across all severity levels. Actual bounties should be tailored to your organization's specific security needs, risk profile, and budget.
+          </p>
+
+          <div id="rewardDetails" class="mt-4 p-3 bg-blue-50 rounded-md hidden" style="display:none;"></div>
+        </div>
+        <!-- /Rewards -->
       </div>
     </div>
-    <!-- END INITIAL BUILDER SELECTION -->
+    <!-- END PAGE 1 -->
 
     <!-- STEPS -->
     <div id="stepContainer" class="pt-4 relative">
-      
-      <!-- REWARDS STEP -->
-      <div id="rewards-step" class="question-step min-h-[200px] hidden pl-0">
-        <div class="flex items-center gap-2 mb-1">
-          <label class="text-lg font-semibold text-gray-800">
-            💵 Reward Tiers
-          </label>
-          <div class="relative">
-            <span class="text-blue-500 cursor-pointer text-sm group">
-              ℹ️
-              <span class="absolute left-full top-1/2 ml-2 -translate-y-1/2 w-72 bg-blue-100 text-black text-sm rounded-lg shadow-lg p-3 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10 border border-blue-300">
-                A clear reward structure helps researchers understand the value of different findings and incentivises quality reports.<br><br>
-                <strong>Consider:</strong><br>
-                • Program budget<br>
-                • Asset criticality<br>
-                • Vulnerability impact<br>
-                • Industry standards<br>
-                • Report quality
-              </span>
-            </span>
-          </div>
-        </div>
-
-        <p class="text-sm text-gray-600 mb-4">Choose a tier here or go to “Scope” to define your own reward structure.</p>
-
-        <div id="rewardTierCards">
-          <!-- Reward tier cards will be dynamically inserted here -->
-        </div>
-
-        <p class="text-sm text-gray-600 mt-4 italic">
-          <strong>Note:</strong> These ranges reflect industry averages across all severity levels. Actual bounties should be tailored to your organization's specific security needs, risk profile, and budget.
-        </p>
-
-        <div id="rewardDetails" class="mt-4 p-3 bg-blue-50 rounded-md hidden" style="display:none;"></div>
-      </div>
-      
-      <!-- FINAL STEP -->
+      <!-- FINAL STEP (Page 2) -->
       <div id="final-step" class="question-step min-h-[200px] hidden">
         <div class="flex items-center gap-2 mb-4">
             <h2 class="text-xl font-bold text-gray-800">📄 Review Your Program Scope</h2>
@@ -168,7 +165,7 @@
             input="final-step-input"
             class="trix-content block shadow rounded-md border outline-none px-3 py-2 mt-2 w-full border-gray-400 focus:outline-blue-600 min-h-[200px]"
         ></trix-editor>
-        </div>
+      </div>
     </div>
   </div>
   <!-- end main card -->
@@ -184,27 +181,30 @@
         <button id="clearMemoryBtn" class="text-sm text-red-700 hover:underline ml-2">
           🧹 Clear Memory (Temp)
         </button>              
+
         <button
           id="viewApiButton"
           class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 text-sm font-medium"
         >🔍 API Data
         </button>
+
+        <!-- Generate Program button moved here, next to API Data -->
         <button
-          id="backButtonBottom"
-          class="bg-blue-200 text-blue-800 px-4 py-2 rounded hover:bg-blue-300 text-sm font-medium"
-        >⏴ Back</button>
-        <button
-          id="nextButtonBottom"
-          class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 text-sm font-medium"
-        >Next ⏵</button>
+          id="generateProgramButton"
+          class="bg-gray-300 text-gray-700 px-4 py-2 rounded text-sm font-medium cursor-not-allowed"
+          title="Generate program"
+          disabled
+        > Generate Program
+        </button>
       </div>
     </div>
   </div>
+
   <!-- Reusable Message Modal -->
   <div
     id="messageModal"
     class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40"
-    >
+  >
     <div class="bg-white rounded-lg shadow-lg p-6 w-full max-w-sm">
       <h2 id="messageModalTitle" class="text-xl font-semibold mb-4 text-gray-800">Notice</h2>
       <p id="messageModalBody" class="mb-6 text-gray-600">Your message goes here.</p>
@@ -216,6 +216,7 @@
       </div>
     </div>
   </div>
+
   <!-- Program Data Modal -->
   <div
     id="programDataModal"

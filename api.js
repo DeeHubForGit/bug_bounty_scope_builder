@@ -179,13 +179,11 @@ function showDataRetryButton(domainOrOptions, maybeErrorMsg, maybeRetryFnName) {
  */
 function setLoadingStateForRewardStep(isLoading) {
   const nextTop    = document.getElementById('nextButton');
-  const nextBottom = document.getElementById('nextButtonBottom');
   const backTop    = document.getElementById('backButton');
-  const backBottom = document.getElementById('backButtonBottom');
   //const viewData   = document.getElementById('viewDataButton');
   const apiData    = document.getElementById('viewApiButton'); 
 
-  const buttons = [nextTop, nextBottom, backTop, backBottom, apiData];
+  const buttons = [nextTop, backTop, apiData];
 
   buttons.forEach(btn => {
     if (!btn) return;

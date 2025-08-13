@@ -1,4 +1,4 @@
-import { initializeSteps, setupEventListeners, registerLoadApiDataFn, registerDisplayScopeText } from './navigation.js';
+import { initializeSteps, setupEventListeners, registerLoadApiDataFn, registerDisplayScopeText, goToNextStep } from './navigation.js';
 import { renderRewardTiers, getRewardsTextForScope } from './rewards.js';
 import { loadApiDataInBackground, storedApiData } from './api.js';
 
@@ -19,36 +19,42 @@ document.addEventListener('DOMContentLoaded', () => {
   // before setting up the wizard interface
   loadAppConfig()
     .then(() => {
-      // After data is loaded:
-      // A) Restore any cached API data first so Scope has mobiles/APIs immediately if available
+      // A) Restore cached API data if present
       loadDataFromLocalStorage();
 
-      // B) If a domain exists and cached API data is missing, preload it in the background now
+      // B) If a domain exists and cached API data is missing, preload it
       fetchApiDataOnStartup();
 
-      // C) Initialise the UI
-      // 1. Initialize step navigation
-      // 2. Render available reward tiers
-      // 3. Attach all button and UI event listeners
+      // C) Initialise UI
       registerDisplayScopeText(displayScopeText);
       renderRewardTiers(rewards);
       initializeSteps();
       setupUrlPersistence();
       setupEventListeners();
+
+      // D) Setup "Generate Program" button (footer button)
+      const genBtn = document.getElementById('generateProgramButton');
+      const urlInput = document.getElementById('websiteUrl');
+
+      if (genBtn && urlInput) {
+        const syncState = () => {
+          genBtn.disabled = !urlInput.value.trim();
+        };
+        urlInput.addEventListener('input', syncState);
+        syncState();
+
+        genBtn.addEventListener('click', () => {
+          if (typeof handleLoadApiData === 'function') handleLoadApiData();
+          goToNextStep();
+        });
+      }
     })
     .catch(error => {
       // If initialization fails, log the error for debugging
       console.error('Error initializing app:', error);
     });
-}); 
-
-/*document.addEventListener('DOMContentLoaded', () => {
-  setTimeout(() => {
-    console.log('[init] running ensureCopyButton() after DOMContentLoaded');
-    ensureCopyButton();
-  }, 1000); // small delay to let steps render
 });
-*/
+
 /**
  * Load config, scope text, and rewards from separate JSON files
  * @returns {Promise} Promise resolving when all data is loaded
