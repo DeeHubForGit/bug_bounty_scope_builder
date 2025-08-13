@@ -41,10 +41,9 @@ document.addEventListener('DOMContentLoaded', () => {
           genBtn.disabled = !urlInput.value.trim();
         };
         urlInput.addEventListener('input', syncState);
-        syncState();
+        setTimeout(syncState, 50);  // small delay to wait for localStorage restore
 
         genBtn.addEventListener('click', () => {
-          if (typeof handleLoadApiData === 'function') handleLoadApiData();
           goToNextStep();
         });
       }
@@ -203,7 +202,10 @@ function setupUrlPersistence() {
 
   // Restore saved value on load (already normalised if we saved it that way)
   const savedUrl = localStorage.getItem('enteredUrl');
-  if (savedUrl) urlInput.value = savedUrl;
+  if (savedUrl) {
+    urlInput.value = savedUrl;
+    urlInput.dispatchEvent(new Event('input')); // ✅ Only trigger if restoring
+  }
 
   // Save normalised value on change
   urlInput.addEventListener('input', () => {

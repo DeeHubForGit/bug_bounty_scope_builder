@@ -22,7 +22,6 @@
 <body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
   <div class="bg-white shadow-lg rounded-lg border border-gray-200 p-8 pb-16 w-full max-w-2xl relative">
     <h1 class="text-3xl font-bold text-gray-800 mb-2">Create a Bug Bounty Program Scope</h1>
-    <p class="text-gray-600 mb-4">Answer the questions below to define your program.</p>
 
     <!-- STEP TRACKER + NAV BUTTONS -->
     <div class="">
@@ -57,11 +56,6 @@
                   title="Back"
                   class="bg-blue-200 text-blue-800 px-3 py-2 rounded hover:bg-blue-300 text-sm font-medium">
             ⏴
-          </button>
-          <button id="nextButton"
-                  title="Next"
-                  class="bg-blue-500 text-white px-3 py-2 rounded hover:bg-blue-600 text-sm font-medium">
-            ⏵
           </button>
           <span id="dataLoadingStatus" class="text-sm text-gray-500"></span>         
         </div>
@@ -177,23 +171,20 @@
   >
     <div class="max-w-2xl mx-auto px-4 py-3 flex justify-end items-center">
       <div class="flex items-center gap-2">
-        <!-- Small loading indicator -->
-        <button id="clearMemoryBtn" class="text-sm text-red-700 hover:underline ml-2">
-          🧹 Clear Memory (Temp)
-        </button>              
-
+        <button
+          id="clearMemoryBtn"
+          class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 text-sm font-medium"
+        >🧹 Clear Memory (Temp)
+        </button>       
         <button
           id="viewApiButton"
           class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 text-sm font-medium"
-        >🔍 API Data
+        >🔍 Data
         </button>
-
-        <!-- Generate Program button moved here, next to API Data -->
         <button
           id="generateProgramButton"
-          class="bg-gray-300 text-gray-700 px-4 py-2 rounded text-sm font-medium cursor-not-allowed"
+          class="bg-blue-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-blue-700 transition"
           title="Generate program"
-          disabled
         > Generate Program
         </button>
       </div>

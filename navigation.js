@@ -21,8 +21,6 @@ function registerDisplayScopeText(fn) { displayScopeTextFn = fn; }
 function initializeSteps() {
   // Get all step elements
   const builderStep = document.getElementById('builderContainer');
-  // Rewards now lives inside the builder step; keep lookup if needed elsewhere
-  // const rewardsStep = document.getElementById('rewards-step');
   const finalStep = document.getElementById('final-step');
   
   // Two pages: Page 1 (URL + Rewards), Page 2 (Final)
@@ -44,9 +42,6 @@ function initializeSteps() {
  * Set up event listeners for navigation buttons
  */
 function setupEventListeners() {
-  // Next button in the top navigation
-  const nextButton = document.getElementById('nextButton');
-  if (nextButton) nextButton.addEventListener('click', goToNextStep);
   
   // Back button in the top navigation
   const backButton = document.getElementById('backButton');
@@ -83,16 +78,6 @@ function showStep(stepIndex) {
     displayScopeTextFn(); // 🔑 call the registered function
   }
   
-  // Show/hide the View Data button 
-  const dataButton = document.getElementById('viewDataButton');
-  if (dataButton) {
-    if (stepIndex === StepIndex.BUILDER && config?.showViewDataButton) {
-      dataButton.classList.remove('hidden');
-    } else {
-      dataButton.classList.add('hidden');
-    }
-  }
-
   // Show or hide the API Data button on Page 1 (URL + Rewards)
   const apiButton = document.getElementById('viewApiButton');
   if (apiButton) {
@@ -101,6 +86,16 @@ function showStep(stepIndex) {
       apiButton.classList.remove('hidden');
     } else {
       apiButton.classList.add('hidden');
+    }
+  }
+
+  // Hide "Generate Program" button on Scope step
+  const genBtn = document.getElementById('generateProgramButton');
+  if (genBtn) {
+    if (stepIndex === StepIndex.FINAL) {
+      genBtn.classList.add('hidden');
+    } else {
+      genBtn.classList.remove('hidden');
     }
   }
 
@@ -143,7 +138,6 @@ function goToPreviousStep() {
  */
 function updateNavigationButtons() {
   const backButton = document.getElementById('backButton');
-  const nextButton = document.getElementById('nextButton');
   
   // Back buttons - always show, but disable and style differently on initial step
   if (backButton) {
@@ -154,19 +148,6 @@ function updateNavigationButtons() {
     } else {
       backButton.classList.add('bg-blue-200', 'hover:bg-blue-300');
       backButton.classList.remove('bg-gray-300', 'text-gray-500');
-    }
-  }
-  
-  // Next buttons - always show, but disable on the last step
-  const isLast = (currentStepIndex === steps.length - 1);
-  if (nextButton) {
-    nextButton.disabled = isLast;
-    if (isLast) {
-      nextButton.classList.remove('bg-blue-500', 'hover:bg-blue-600');
-      nextButton.classList.add('bg-gray-300', 'text-gray-500');
-    } else {
-      nextButton.classList.add('bg-blue-500', 'hover:bg-blue-600');
-      nextButton.classList.remove('bg-gray-300', 'text-gray-500');
     }
   }
   
