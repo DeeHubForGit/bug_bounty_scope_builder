@@ -34,8 +34,6 @@ function initializeSteps() {
     showStep(currentStepIndex);
   }
   
-  // Update the step tracker
-  updateStepTracker();
 }
 
 /**
@@ -70,8 +68,6 @@ function showStep(stepIndex) {
   
   // Update UI elements
   updateNavigationButtons();
-  updateStepTracker();
-  updateStepIconsHighlight(stepIndex);
   
   // If we're showing the final scope step, update its content
   if (stepIndex === StepIndex.FINAL && typeof displayScopeTextFn === 'function') {
@@ -110,9 +106,6 @@ function goToNextStep() {
   if (currentStepIndex < steps.length - 1) {
     // When going from Page 1 (URL + Rewards) to Final, manage UI elements
     if (currentStepIndex === StepIndex.BUILDER) {
-      // Show step icons when moving forward
-      const stepIcons = document.getElementById('stepIcons');
-      if (stepIcons) stepIcons.classList.remove('hidden');
 
       // Trigger registered background loader on first transition
       if (typeof loadApiDataFn === 'function') {
@@ -154,65 +147,6 @@ function updateNavigationButtons() {
 }
 
 /**
- * Update UI elements for the current step
- */
-function updateStepTracker() {
-  const stepIcons = document.getElementById('stepIcons');
-
-  // On initial step: hide icons
-  if (currentStepIndex === StepIndex.BUILDER) {
-    if (stepIcons) stepIcons.classList.add('hidden');
-  } else {
-    // On final step: show icons
-    if (stepIcons) stepIcons.classList.remove('hidden');
-  }
-}  
-
-/**
- * Highlight the appropriate step icon based on current step
- * @param {number} stepIndex Index of the current step
- */
-function updateStepIconsHighlight(stepIndex) {
-  const rewardsIcon = document.getElementById('rewardsIcon');
-  const scopeIcon = document.getElementById('scopeIcon');
-  const rewardsLabel = document.getElementById('rewardsLabel');
-  const scopeLabel = document.getElementById('scopeLabel');
-  
-  if (rewardsIcon && scopeIcon) {
-    // Clear all highlights first
-    rewardsIcon.classList.remove('ring-2', 'ring-blue-500', 'ring-offset-2');
-    scopeIcon.classList.remove('ring-2', 'ring-blue-500', 'ring-offset-2');
-    
-    // Reset label font weights
-    if (rewardsLabel) {
-      rewardsLabel.classList.remove('font-bold');
-      rewardsLabel.classList.add('font-normal');
-    }
-    if (scopeLabel) {
-      scopeLabel.classList.remove('font-bold');
-      scopeLabel.classList.add('font-normal');
-    }
-    
-    // Page 1 (BUILDER) → highlight Rewards
-    if (stepIndex === StepIndex.BUILDER) {
-      rewardsIcon.classList.add('ring-2', 'ring-blue-500', 'ring-offset-2');
-      if (rewardsLabel) {
-        rewardsLabel.classList.remove('font-normal');
-        rewardsLabel.classList.add('font-bold');
-      }
-    }
-    // Page 2 (FINAL) → highlight Scope
-    else if (stepIndex === StepIndex.FINAL) {
-      scopeIcon.classList.add('ring-2', 'ring-blue-500', 'ring-offset-2');
-      if (scopeLabel) {
-        scopeLabel.classList.remove('font-normal');
-        scopeLabel.classList.add('font-bold');
-      }
-    }
-  }
-}
-
-/**
  * Update debug information
  */
 function updateDebugInfo() {
@@ -240,8 +174,6 @@ export {
   goToNextStep,
   goToPreviousStep,
   updateNavigationButtons,
-  updateStepTracker,
-  updateStepIconsHighlight,
   updateDebugInfo,
   registerDisplayScopeText,
   registerLoadApiDataFn
