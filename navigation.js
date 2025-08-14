@@ -66,9 +66,6 @@ function showStep(stepIndex) {
   // Save current step index
   localStorage.setItem('currentStepIndex', stepIndex);
   
-  // Update UI elements
-  updateNavigationButtons();
-  
   // If we're showing the final scope step, update its content
   if (stepIndex === StepIndex.FINAL && typeof displayScopeTextFn === 'function') {
     displayScopeTextFn(); // 🔑 call the registered function
@@ -94,9 +91,6 @@ function showStep(stepIndex) {
       genBtn.classList.remove('hidden');
     }
   }
-
-  // For debugging
-  updateDebugInfo();
 }
 
 /**
@@ -126,55 +120,12 @@ function goToPreviousStep() {
   }
 }
 
-/**
- * Update the state of navigation buttons based on current step
- */
-function updateNavigationButtons() {
-  const backButton = document.getElementById('backButton');
-  
-  // Back buttons - always show, but disable and style differently on initial step
-  if (backButton) {
-    backButton.disabled = (currentStepIndex === StepIndex.BUILDER);
-    if (currentStepIndex === StepIndex.BUILDER) {
-      backButton.classList.remove('bg-blue-200', 'hover:bg-blue-300');
-      backButton.classList.add('bg-gray-300', 'text-gray-500');
-    } else {
-      backButton.classList.add('bg-blue-200', 'hover:bg-blue-300');
-      backButton.classList.remove('bg-gray-300', 'text-gray-500');
-    }
-  }
-  
-}
-
-/**
- * Update debug information
- */
-function updateDebugInfo() {
-  const currentStepIndexDisplay = document.getElementById('currentStepIndexDisplay');
-  const stepList = document.getElementById('stepList');
-  
-  if (currentStepIndexDisplay) {
-    currentStepIndexDisplay.textContent = currentStepIndex.toString();
-  }
-  
-  if (stepList) {
-    stepList.innerHTML = '';
-    steps.forEach((step, index) => {
-      const li = document.createElement('li');
-      li.textContent = `Step ${index}: ${step.id || 'unnamed'} ${index === currentStepIndex ? '(active)' : ''}`;
-      stepList.appendChild(li);
-    });
-  }
-}
-
 export { 
   initializeSteps,
   setupEventListeners,
   showStep,
   goToNextStep,
   goToPreviousStep,
-  updateNavigationButtons,
-  updateDebugInfo,
   registerDisplayScopeText,
   registerLoadApiDataFn
 };

@@ -22,8 +22,8 @@ document.addEventListener('DOMContentLoaded', () => {
       // A) Restore cached API data if present
       loadDataFromLocalStorage();
 
-      // B) If a domain exists and cached API data is missing, preload it
-      fetchApiDataOnStartup();
+      // B) If a domain exists and cached API data is missing, preload it  TO DO Remove later if needed
+      //fetchApiDataOnStartup();
 
       // C) Initialise UI
       registerDisplayScopeText(displayScopeText);
@@ -96,7 +96,7 @@ async function loadAppConfig() {
       throw new Error('Invalid config format — expected object');
     }
 
-    console.log('✅ Data loaded:', { scopeText, rewards, config });
+    console.log('✅ Scope, rewards & config loaded:', { scopeText, rewards, config });
     return { scopeText, rewards, config };
 
   } catch (error) {
@@ -104,6 +104,78 @@ async function loadAppConfig() {
     throw error;
   }
 }  
+
+const websiteUrlInput = document.getElementById('websiteUrl');
+const generateButton = document.getElementById('generateProgramButton');
+
+function debounce(func, wait) {
+  let timeout;
+  return function (...args) {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => func.apply(this, args), wait);
+  };
+}
+
+const validTlds = new Set([
+  'com', 'net', 'org', 'gov', 'edu', 'info', 'biz',
+  'io', 'co', 'dev', 'app', 'au', 'uk', 'us', 'ca', 'de', 'fr', 'jp', 'cn', 'in', 'nz'
+]);
+
+function isValidDomainOrUrl(input) {
+  try {
+    const url = new URL(input.includes('://') ? input : `https://${input}`);
+    const hostname = url.hostname;
+    const parts = hostname.split('.');
+    if (parts.length < 2) return false;
+
+    const tld = parts[parts.length - 1].toLowerCase();
+    if (!validTlds.has(tld)) return false;
+
+    for (const part of parts) {
+      if (!/^[a-zA-Z0-9-]{1,63}$/.test(part)) return false;
+      if (part.startsWith('-') || part.endsWith('-')) return false;
+    }
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function showDomainValidationError() {
+  let errorEl = document.getElementById('urlError');
+  if (!errorEl) {
+    errorEl = document.createElement('div');
+    errorEl.id = 'urlError';
+    errorEl.className = 'text-red-600 mt-1 text-sm';
+    errorEl.textContent = 'Please enter a valid domain or website URL (e.g. example.com or https://example.com)';
+    const inputEl = document.getElementById('websiteUrl');
+    inputEl.insertAdjacentElement('afterend', errorEl);
+  }
+}
+
+function hideDomainValidationError() {
+  const errorEl = document.getElementById('urlError');
+  if (errorEl) {
+    errorEl.remove();
+  }
+}
+
+document.getElementById('websiteUrl').addEventListener('keydown', function (e) {
+  if (e.key === 'Enter') {
+    const domain = this.value.trim();
+
+    if (!isValidDomainOrUrl(domain)) {
+      showDomainValidationError();  // ⛔ new helper function
+      return;
+    }
+
+    hideDomainValidationError();
+    loadApiDataInBackground(domain)
+      .then(() => console.log("✅ API data successfully loaded for", domain))
+      .catch(err => console.warn("❌ Failed to load API data:", err));
+  }
+});
 
 /**
  * Read and parse a JSON object from localStorage.
@@ -422,9 +494,51 @@ function replaceBlockByMarker(existingHTML, sectionName, replacementBlock) {
 }
 
 /**
- * Display the scope text in the Trix editor (with Assets + Rewards injected)
+ * Build partial scope text using API result (Assets injected only).
+ * Saves result in memory and localStorage but does not render it.
  */
+function buildPartialScopeTextFromApi() {
+  // Validate scopeText from stored API data
+  const rawScopeText = storedApiData?.scopeText;
+  if (!rawScopeText || !Array.isArray(rawScopeText) || rawScopeText.length === 0) {
+    console.warn('⚠️ No valid scope text returned from API');
+    return;
+  }
+
+  // 1) Join API scope array into template HTML
+  const templateHTML = rawScopeText.join('\n').trim();
+
+  // 2) Build the Assets block
+  const assetsBlock = buildAssetsBlockForScope();
+
+  // 3) Inject only the asset block (do not touch rewards)
+  const partialScopeHTML = replaceBlockByMarker(templateHTML, 'IN-SCOPE', assetsBlock);
+
+  // 4) Save in memory
+  storedApiData.partialScopeHTML = partialScopeHTML;
+
+  // 5) Save in localStorage for persistence
+  localStorage.setItem('partialScopeHTML', partialScopeHTML);
+
+  console.log('✅ Partial scope text saved in memory and localStorage (not rendered yet)');
+}
+
+function loadPartialScopeFromStorage() {
+  const saved = localStorage.getItem('partialScopeHTML');
+  if (saved) {
+    storedApiData.partialScopeHTML = saved;
+    console.log('✅ Loaded partial scope from localStorage');
+  }
+}
+
+// TO DO
 function displayScopeText() {
+}
+
+/**
+ * OLD: Display the scope text in the Trix editor (with Assets + Rewards injected)
+ */
+/* function displayScopeText() {
   const finalInput  = document.getElementById('final-step-input');
   const finalEditor = document.getElementById('finalSummaryContent');
   if (!finalInput || !finalEditor || !finalEditor.editor) {
@@ -453,7 +567,7 @@ function displayScopeText() {
   finalEditor.editor.loadHTML(scopeHTML);
 
   console.log('✅ Scope text displayed in Trix editor (assets + rewards injected)');
-}
+}*/
 
 // Attach a 📋 Copy button to the *final scope* Trix editor toolbar
 function addCopyButton() {

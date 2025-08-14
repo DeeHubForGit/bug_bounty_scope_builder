@@ -140,13 +140,13 @@ function showDataRetryButton(domainOrOptions, maybeErrorMsg, maybeRetryFnName) {
   const apiFailed    = !!storedApiData?.apiError;
   let lineMsg;
   if (mobileFailed && apiFailed) {
-    lineMsg = `Error occurred retrieving mobile apps and API for ${domain}`;
+    lineMsg = `Error occurred retrieving mobile apps and API`;
   } else if (mobileFailed) {
-    lineMsg = `Error occurred retrieving mobile apps for ${domain}`;
+    lineMsg = `Error occurred retrieving mobile apps`;
   } else if (apiFailed) {
-    lineMsg = `Error occurred retrieving API details for ${domain}`;
+    lineMsg = `Error occurred retrieving API details`;
   } else {
-    lineMsg = `Error occurred retrieving program data for ${domain}`;
+    lineMsg = `Error occurred retrieving program data`;
   }
 
   // safe tooltip html
@@ -177,13 +177,11 @@ function showDataRetryButton(domainOrOptions, maybeErrorMsg, maybeRetryFnName) {
 /**
  * Update the loading state for the Next buttons.
  */
-function setLoadingStateForRewardStep(isLoading) {
-  const nextTop    = document.getElementById('nextButton');
-  const backTop    = document.getElementById('backButton');
-  //const viewData   = document.getElementById('viewDataButton');
-  const apiData    = document.getElementById('viewApiButton'); 
+function setLoadingStateForInitialStep(isLoading) {
+  const apiData = document.getElementById('viewApiButton');
+  const generateProgramButton = document.getElementById('generateProgramButton');
 
-  const buttons = [nextTop, backTop, apiData];
+  const buttons = [apiData, generateProgramButton];
 
   buttons.forEach(btn => {
     if (!btn) return;
@@ -194,6 +192,15 @@ function setLoadingStateForRewardStep(isLoading) {
       btn.classList.remove('opacity-50', 'cursor-not-allowed');
     }
   });
+  
+  // Handle spinner inside the Generate Program button
+  if (generateProgramButton) {
+    if (isLoading) {
+      generateProgramButton.innerHTML = `<span class="inline-block animate-spin mr-2">🔄</span>Loading...`;
+    } else {
+      generateProgramButton.innerHTML = `Generate Program`;
+    }
+  }
 }
 
 function showApiResultsPopup() {
@@ -334,7 +341,7 @@ async function loadApiDataInBackground() {
   }
 
   // Disable nav + data changes while loading
-  setLoadingStateForRewardStep(true);
+  setLoadingStateForInitialStep(true);
 
   // Update state to loading
   storedApiData.loading = true;
@@ -362,7 +369,7 @@ async function loadApiDataInBackground() {
         storedApiData.mobileError = null;
         storedApiData.apiError = null;
         hideGlobalLoadingMessage();
-        setLoadingStateForRewardStep(false);
+        setLoadingStateForInitialStep(false);
         return;
       } catch {
         // Fall through to fresh fetch
@@ -396,7 +403,7 @@ async function loadApiDataInBackground() {
       };
 
       hideGlobalLoadingMessage();
-      setLoadingStateForRewardStep(false);
+      setLoadingStateForInitialStep(false);
       showDataRetryButton({ domain, errorMsg: storedApiData.error.details });
       return;
     }
@@ -428,7 +435,7 @@ async function loadApiDataInBackground() {
     }
 
     hideGlobalLoadingMessage();
-    setLoadingStateForRewardStep(false);
+    setLoadingStateForInitialStep(false);
 
     // If one piece failed, still show inline retry with precise message
     if (mobileError || apiError) {
@@ -449,7 +456,7 @@ async function loadApiDataInBackground() {
     };
 
     hideGlobalLoadingMessage();
-    setLoadingStateForRewardStep(false);
+    setLoadingStateForInitialStep(false);
     showDataRetryButton({ domain, errorMsg: `${storedApiData.error.message} — ${storedApiData.error.details}` });
   }
 }

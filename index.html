@@ -53,6 +53,9 @@
             class="w-full px-3 py-2 border rounded mb-3"
             required
           >
+          <p id="domainErrorMessage" class="text-red-600 text-sm mt-1 hidden">
+            <!-- Message will be inserted here -->
+          </p>          
         </div>
 
         <!-- Auto Results Container (Initially Hidden) -->
@@ -83,7 +86,7 @@
             </div>
           </div>
 
-          <p class="text-sm text-gray-600 mb-4">Choose a tier here or go to “Scope” to define your own reward structure.</p>
+          <p class="text-sm text-gray-600 mb-4">Choose a tier here or generate the program to define your own reward structure.</p>
 
           <div id="rewardTierCards">
             <!-- Reward tier cards will be dynamically inserted here -->
@@ -113,7 +116,7 @@
                 </div>
             </div>
         </div>
-        
+
         <!-- Hidden input linked to Trix -->
         <input type="hidden" id="final-step-input" />
 
@@ -182,15 +185,32 @@
     id="programDataModal"
     class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40"
   >
-    <div class="bg-white rounded-lg shadow-lg p-6 w-full max-w-3xl max-h-[80vh] overflow-auto relative">
-      <div class="flex justify-between items-center mb-4">
-        <h2 id="programDataModalTitle" class="text-xl font-semibold text-gray-800">Program Data</h2>
-        <button id="closeProgramDataModal" class="text-gray-400 hover:text-gray-600 text-2xl font-bold">&times;</button>
-      </div>
-      <div id="programDataModalContent" class="overflow-auto">
+    <div class="bg-white rounded-lg shadow-lg w-full max-w-3xl relative">
+      
+      <!-- ❌ Close Button: stays fixed -->
+      <button
+        id="closeProgramDataModal"
+        class="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-2xl font-bold z-50"
+        aria-label="Close"
+      >
+        &times;
+      </button>
+
+      <!-- Title -->
+      <h2 id="programDataModalTitle" class="text-xl font-semibold text-gray-800 px-6 pt-6 pb-0">
+        Program Data
+      </h2>
+
+      <!-- ✅ Scrollable content only -->
+      <div
+        id="programDataModalContent"
+        class="overflow-auto max-h-[calc(80vh-4rem)] px-6 pb-6 pt-4"
+      >
         <!-- Content gets injected here -->
       </div>
+
     </div>
   </div>
+
 </body>
 </html>
