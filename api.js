@@ -26,16 +26,31 @@ const storedApiData = {
   apiDetails: null
 };  
 
-const viewApiButton = document.getElementById('viewApiButton');
-if (viewApiButton) {
-    viewApiButton.addEventListener('click', () => {
-      if (!storedApiData.mobileDetails && !storedApiData.apiDetails && !storedApiData.loading) {
-          loadApiDataInBackground().then(() => showApiResultsPopup());
-      } else {
-        showApiResultsPopup();
-      }
-    });
+// api.js — make the Data button DISPLAY‑ONLY (no fetches)
+function wireDataButtonDisplayOnly() {
+  const btn = document.getElementById('viewDataButton');
+  if (!btn) return;
+
+  // Remove any inline onclick and existing listeners by cloning
+  const clone = btn.cloneNode(true);
+  clone.removeAttribute('onclick'); // safety: kill inline handlers if present
+  btn.parentNode.replaceChild(clone, btn);
+
+  // Display-only click handler
+  clone.addEventListener('click', (e) => {
+    e.preventDefault();
+    // Never fetch: ensure loading flags are off so UI shows cached state only
+    if (storedApiData) {
+      storedApiData.loading = false;
+      storedApiData.isLoading = false;
+    }
+    // Just render whatever is cached (memory/localStorage). No fetch.
+    showApiResultsPopup();
+  });
 }
+
+// Ensure it runs after the button exists
+document.addEventListener('DOMContentLoaded', wireDataButtonDisplayOnly);
 
 /**
  * Wrap fetch in a timeout.
@@ -175,13 +190,14 @@ function showDataRetryButton(domainOrOptions, maybeErrorMsg, maybeRetryFnName) {
 }
 
 /**
- * Update the loading state for the Next buttons.
+ * Update the loading state for the buttons.
  */
 function setLoadingStateForInitialStep(isLoading) {
-  const apiData = document.getElementById('viewApiButton');
+  const reset = document.getElementById('resetButton');
+  const viewData = document.getElementById('viewDataButton');
   const generateProgramButton = document.getElementById('generateProgramButton');
 
-  const buttons = [apiData, generateProgramButton];
+  const buttons = [reset, viewData, generateProgramButton];
 
   buttons.forEach(btn => {
     if (!btn) return;
@@ -192,7 +208,7 @@ function setLoadingStateForInitialStep(isLoading) {
       btn.classList.remove('opacity-50', 'cursor-not-allowed');
     }
   });
-  
+
   // Handle spinner inside the Generate Program button
   if (generateProgramButton) {
     if (isLoading) {
@@ -204,53 +220,47 @@ function setLoadingStateForInitialStep(isLoading) {
 }
 
 function showApiResultsPopup() {
-  const modal = document.getElementById('programDataModal');
+  const modal       = document.getElementById('programDataModal');
   const contentArea = document.getElementById('programDataModalContent');
-  const closeBtn = document.getElementById('closeProgramDataModal');
+  const closeBtn    = document.getElementById('closeProgramDataModal');
 
   if (!modal || !contentArea || !closeBtn) {
     console.error("⚠️ Program Data modal elements missing");
     return;
   }
 
-  // Set up close handler
+  // Close handlers
   closeBtn.onclick = () => modal.classList.add('hidden');
   modal.addEventListener('click', (e) => {
     if (e.target === modal) modal.classList.add('hidden');
   });
 
-  // Decide what to render
-  if (storedApiData.loading) {
-    contentArea.innerHTML = renderLoadingMessage();
-  } else if (storedApiData.error) {
-    contentArea.innerHTML = renderErrorMessage(storedApiData.error);
-    attachRetryButtonHandler(modal);
-  } else if (storedApiData.mobileDetails || storedApiData.apiDetails) {
-    let htmlContent = '';
-    if (storedApiData.mobileDetails) {
-      htmlContent += renderDataSection("📱 Mobile Apps", storedApiData.mobileDetails);
-    }
-    if (storedApiData.apiDetails) {
-      htmlContent += renderDataSection("🔗 API Endpoints", storedApiData.apiDetails);
-    }
-    contentArea.innerHTML = htmlContent;
-  } else {
-    contentArea.innerHTML = renderNoDataMessage();
-    attachRetryButtonHandler(modal);
+  // 🔒 Display-only: ensure no fetch can be triggered by "loading" state
+  if (typeof storedApiData !== 'undefined' && storedApiData) {
+    storedApiData.loading   = false;
+    storedApiData.isLoading = false;
   }
 
-  // Finally show the modal
-  modal.classList.remove('hidden');
-}  
+  // Decide what to render from CACHE ONLY
+  const hasMobile = !!(storedApiData && storedApiData.mobileDetails);
+  const hasApi    = !!(storedApiData && storedApiData.apiDetails);
+  const hasError  = !!(storedApiData && storedApiData.error);
 
-function renderLoadingMessage() {
-  return `
-    <div class="text-center py-8">
-      <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-700 mb-4"></div>
-      <p class="text-lg font-medium">Loading Program Data...</p>
-      <p class="text-sm text-gray-500 mt-2">This may take up to a minute to complete.</p>
-    </div>
-  `;
+  if (hasMobile || hasApi) {
+    let html = '';
+    if (hasMobile) html += renderDataSection("📱 Mobile Apps", storedApiData.mobileDetails);
+    if (hasApi)    html += renderDataSection("🔗 API Endpoints", storedApiData.apiDetails);
+    contentArea.innerHTML = html;
+  } else if (hasError) {
+    // Show cached error message
+    contentArea.innerHTML = renderErrorMessage(storedApiData.error);
+  } else {
+    // No cached data — show a friendly notice
+    contentArea.innerHTML = renderNoDataMessage();
+  }
+
+  // Show modal
+  modal.classList.remove('hidden');
 }
 
 function renderErrorMessage(errorObj) {
@@ -303,32 +313,24 @@ function formatProgramDataContent(data) {
 }
 
 function renderNoDataMessage() {
-  const domain = localStorage.getItem('enteredUrl') || 'unknown domain';
+  const domain = (localStorage.getItem('enteredUrl') || '').trim();
+
+  const domainLine = domain
+    ? `No data found for: <span class="font-mono">${domain}</span>`
+    : `No URL entered yet. Enter a website above to collect data.`;
+
   return `
     <div class="text-center py-6">
-      <div class="bg-gray-50 border-l-4 border-gray-300 text-gray-700 p-4 mb-4 text-left">
+      <div class="bg-gray-50 border-l-4 border-gray-300 text-gray-700 p-4 mb-2 text-left">
         <div class="flex items-center mb-2">
           <span class="text-2xl mr-2">ℹ️</span>
           <p class="font-semibold text-xl">No Program Data Available</p>
         </div>
-        <p>No data found for: <span class="font-mono">${domain}</span></p>
+        <p>${domainLine}</p>
       </div>
-      <button id="retryApiButton" 
-        class="mt-2 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 flex items-center mx-auto">
-        ↻ Load Data
-      </button>
+      <p class="text-sm text-gray-500">Tip: Program data loads automatically from the main form once a valid URL is entered.</p>
     </div>
   `;
-}
-
-function attachRetryButtonHandler(modal) {
-  const retryBtn = document.getElementById('retryApiButton');
-  if (retryBtn) {
-      retryBtn.addEventListener('click', () => {
-          document.body.removeChild(modal);
-              loadApiDataInBackground();
-      });
-  }
 }
 
 // Function to load API data in the background and handle state updates

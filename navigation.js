@@ -1,131 +1,119 @@
+// navigation.js — minimal two-step navigator
 const StepIndex = Object.freeze({
   BUILDER: 0,
-  FINAL: 1
-});  
+  FINAL: 1,
+});
 
 // Global state
 let currentStepIndex = 0;
 let steps = [];
 
 // Callback registered from script.js
-let loadApiDataFn = null;
-function registerLoadApiDataFn(fn) { loadApiDataFn = fn; }
-
-// Callback registered from script.js
 let displayScopeTextFn = null;
 function registerDisplayScopeText(fn) { displayScopeTextFn = fn; }
 
 /**
- * Initialize the steps array and set up initial state
+ * Initialize the two steps and show initial state.
  */
 function initializeSteps() {
-  // Get all step elements
   const builderStep = document.getElementById('builderContainer');
-  const finalStep = document.getElementById('final-step');
-  
-  // Two pages: Page 1 (URL + Rewards), Page 2 (Final)
+  const finalStep   = document.getElementById('final-step');
+
   steps = [builderStep, finalStep];
-  
-  // Restore saved step if available, else show first step
-  const savedStep = localStorage.getItem('currentStepIndex');
-  if (savedStep !== null && steps[parseInt(savedStep, 10)]) {
-    showStep(parseInt(savedStep, 10));
-  } else {
-    showStep(currentStepIndex);
+
+  // Wire Back button to go to the Builder (first) page
+  const backButton = document.getElementById('backButton');
+  if (backButton) {
+    backButton.onclick = goToBuilder;
+  }
+
+  // Wire Back button to go to the Builder (first) page
+  const generateButton = document.getElementById('generateProgramButton');
+  if (generateButton) {
+    generateButton.onclick = goToScope;
   }
   
+  // Restore saved step if valid; else show first step
+  const saved = localStorage.getItem('currentStepIndex');
+  const savedIdx = Number.parseInt(saved, 10);
+  const hasValidSaved =
+    Number.isInteger(savedIdx) &&
+    savedIdx >= 0 &&
+    savedIdx < steps.length &&
+    !!steps[savedIdx];
+
+  showStep(hasValidSaved ? savedIdx : StepIndex.BUILDER);
 }
 
 /**
- * Set up event listeners for navigation buttons
- */
-function setupEventListeners() {
-  
-  // Back button in the top navigation
-  const backButton = document.getElementById('backButton');
-  if (backButton) backButton.addEventListener('click', goToPreviousStep);
-  
-}
-
-/**
- * Show a specific step and hide others
- * @param {number} stepIndex Index of the step to show
+ * Show a specific step and hide others.
  */
 function showStep(stepIndex) {
-  // Update step visibility
-  for (let i = 0; i < steps.length; i++) {
-    if (steps[i]) {
-      if (i === stepIndex) steps[i].classList.remove('hidden');
-      else steps[i].classList.add('hidden');
-    }
-  }
-  
-  // Update current step index
-  currentStepIndex = stepIndex;
+  if (stepIndex === currentStepIndex) return; // no-op if already showing
 
-  // Save current step index
-  localStorage.setItem('currentStepIndex', stepIndex);
-  
-  // If we're showing the final scope step, update its content
-  if (stepIndex === StepIndex.FINAL && typeof displayScopeTextFn === 'function') {
-    displayScopeTextFn(); // 🔑 call the registered function
+  // Toggle step visibility
+  for (let i = 0; i < steps.length; i++) {
+    const el = steps[i];
+    if (!el) continue;
+    if (i === stepIndex) el.classList.remove('hidden');
+    else el.classList.add('hidden');
   }
-  
-  // Show or hide the API Data button on Page 1 (URL + Rewards)
-  const apiButton = document.getElementById('viewApiButton');
-  if (apiButton) {
-    const showButtonInConfig = window.config?.showApiDataButton;
-    if (stepIndex === StepIndex.BUILDER && showButtonInConfig) {
-      apiButton.classList.remove('hidden');
+
+  currentStepIndex = stepIndex;
+  localStorage.setItem('currentStepIndex', stepIndex);
+
+  // If we're showing the final scope step, render its content
+  if (stepIndex === StepIndex.FINAL && typeof displayScopeTextFn === 'function') {
+    displayScopeTextFn();
+  }
+
+  // Show/hide the Data button on the Builder page
+  const dataBtn = document.getElementById('viewDataButton');
+  if (dataBtn) {
+    const showButton = window.config?.showApiDataButton; // same config flag
+    if (stepIndex === StepIndex.BUILDER && showButton) {
+      dataBtn.classList.remove('hidden');
     } else {
-      apiButton.classList.add('hidden');
+      dataBtn.classList.add('hidden');
     }
   }
 
   // Hide "Generate Program" button on Scope step
   const genBtn = document.getElementById('generateProgramButton');
   if (genBtn) {
-    if (stepIndex === StepIndex.FINAL) {
-      genBtn.classList.add('hidden');
-    } else {
-      genBtn.classList.remove('hidden');
-    }
+    genBtn.classList.toggle('hidden', stepIndex === StepIndex.FINAL);
+  }
+
+  // Show Back button on FINAL, hide on BUILDER
+  const backButton = document.getElementById('backButton');
+  if (backButton) {
+    backButton.classList.toggle('hidden', stepIndex === StepIndex.BUILDER);
   }
 }
 
 /**
- * Go to the next step
+ * Public: go straight to the Scope (FINAL) screen.
  */
-function goToNextStep() {
-  if (currentStepIndex < steps.length - 1) {
-    // When going from Page 1 (URL + Rewards) to Final, manage UI elements
-    if (currentStepIndex === StepIndex.BUILDER) {
-
-      // Trigger registered background loader on first transition
-      if (typeof loadApiDataFn === 'function') {
-        loadApiDataFn();
-      }
-    }
-
-    showStep(currentStepIndex + 1);
-  }
-}   
-
-/**
- * Go to the previous step
- */
-function goToPreviousStep() {
-  if (currentStepIndex > 0) {
-    showStep(currentStepIndex - 1);
+function goToScope() {
+  if (currentStepIndex !== StepIndex.FINAL) {
+    showStep(StepIndex.FINAL);
   }
 }
 
-export { 
+/**
+ * Public: go straight to the Builder (first) screen.
+ */
+function goToBuilder() {
+  if (currentStepIndex !== StepIndex.BUILDER) {
+    showStep(StepIndex.BUILDER);
+  }
+}
+
+export {
+  StepIndex,
   initializeSteps,
-  setupEventListeners,
   showStep,
-  goToNextStep,
-  goToPreviousStep,
-  registerDisplayScopeText,
-  registerLoadApiDataFn
+  goToScope,
+  goToBuilder,
+  registerDisplayScopeText
 };

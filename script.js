@@ -1,4 +1,4 @@
-import { initializeSteps, setupEventListeners, registerLoadApiDataFn, registerDisplayScopeText, goToNextStep } from './navigation.js';
+import { initializeSteps, registerDisplayScopeText, goToScope } from './navigation.js';
 import { renderRewardTiers, getRewardsTextForScope } from './rewards.js';
 import { loadApiDataInBackground, storedApiData } from './api.js';
 
@@ -30,7 +30,6 @@ document.addEventListener('DOMContentLoaded', () => {
       renderRewardTiers(rewards);
       initializeSteps();
       setupUrlPersistence();
-      setupEventListeners();
 
       // D) Setup "Generate Program" button (footer button)
       const genBtn = document.getElementById('generateProgramButton');
@@ -42,10 +41,6 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         urlInput.addEventListener('input', syncState);
         setTimeout(syncState, 50);  // small delay to wait for localStorage restore
-
-        genBtn.addEventListener('click', () => {
-          goToNextStep();
-        });
       }
     })
     .catch(error => {
@@ -302,9 +297,6 @@ function handleLoadApiData() {
   loadApiDataInBackground(domain);
 }
 
-// Register function so it can be used by navigation
-registerLoadApiDataFn(handleLoadApiData);
-
 function getScopeTextFromJSON() {
   if (!Array.isArray(scopeText)) {
       console.error('❌ scopeText is not loaded or not an array');
@@ -531,8 +523,74 @@ function loadPartialScopeFromStorage() {
   }
 }
 
-// TO DO
+/**
+ * Return the final Scope HTML by combining:
+ * - the saved partial scope (scope + assets) from memory/localStorage
+ * - the current rewards block
+ *
+ * Falls back carefully if partial not found yet.
+ */
+function getFinalScopeHTML() {
+  // 1) Ensure we have the most recent partial scope in memory
+  if (!storedApiData?.partialScopeHTML) {
+    loadPartialScopeFromStorage();
+  }
+
+  // 2) Establish a base HTML that already includes IN‑SCOPE (assets)
+  let baseWithAssets = (storedApiData && storedApiData.partialScopeHTML) || '';
+
+  // If not available yet, try building it now from what we have
+  if (!baseWithAssets) {
+    // Try to build from API-provided scope text (array of template lines)
+    const rawScopeText = storedApiData?.scopeText;
+    if (rawScopeText && Array.isArray(rawScopeText) && rawScopeText.length > 0) {
+      const templateHTML = rawScopeText.join('\n').trim();
+      const assetsBlock  = buildAssetsBlockForScope();
+      baseWithAssets     = replaceBlockByMarker(templateHTML, 'IN-SCOPE', assetsBlock);
+    } else {
+      // Final fallback: use local JSON template helper
+      const templateHTML = getScopeTextFromJSON();
+      const assetsBlock  = buildAssetsBlockForScope();
+      baseWithAssets     = replaceBlockByMarker(templateHTML, 'IN-SCOPE', assetsBlock);
+    }
+  }
+
+  // 3) Build rewards block using your existing helper (expects global `rewards`)
+  const rewardsBlock = getRewardsTextForScope(rewards);
+
+  // 4) Inject rewards into the template
+  const finalHTML = replaceBlockByMarker(baseWithAssets, 'REWARDS', rewardsBlock).trim();
+
+  return finalHTML;
+}
+
+/**
+ * Display the final Scope (scope + assets + rewards) in the Trix editor.
+ * John’s step 8: “Add the rewards section to the template and show the finished product on the next page.”
+ */
 function displayScopeText() {
+  const finalInput  = document.getElementById('final-step-input');
+  const finalEditor = document.getElementById('finalSummaryContent');
+
+  if (!finalInput || !finalEditor || !finalEditor.editor) {
+    console.error('❌ Missing Trix editor elements: #final-step-input and/or #finalSummaryContent');
+    return;
+  }
+
+  // Build the finished product
+  const scopeHTML = getFinalScopeHTML();
+
+  // Optional: copy button (kept as-is per your current flow)
+  if (typeof addCopyButton === 'function') {
+    addCopyButton();
+  }
+
+  // Render into Trix (keep both value + loadHTML for consistency with your existing pattern)
+  finalInput.value = scopeHTML;
+  finalInput.dispatchEvent(new Event('input', { bubbles: true }));
+  finalEditor.editor.loadHTML(scopeHTML);
+
+  console.log('✅ Finished scope displayed in Trix (scope + assets from memory + rewards).');
 }
 
 /**
@@ -669,35 +727,116 @@ function clearRewardsSelection() {
   localStorage.removeItem('selectedRewardTier');
 }
 
-function clearMemoryForNewUserTest() {
-  localStorage.removeItem('enteredUrl');
+function performReset() {
+  // ─────────────────────────────────────────────────────────────
+  // 1) Clear localStorage keys used by the current app
+  // ─────────────────────────────────────────────────────────────
+  const keysToRemove = [
+    'enteredUrl',
+    'formState',
+    'sectionSelections',
+    'sectionCounts',
+    'currentStepIndex',
+    'selectedRewardTier',
+    'partialScopeHTML'
+  ];
+  keysToRemove.forEach(k => localStorage.removeItem(k));
 
+  // Remove any cached API payloads
   Object.keys(localStorage).forEach(key => {
     if (key.startsWith('apiData_')) localStorage.removeItem(key);
   });
 
-  localStorage.removeItem('selectedRewardTier');
-  ['formState','sectionSelections','sectionCounts','currentStepIndex'].forEach(k => localStorage.removeItem(k));
-  
-  clearRewardsSelection();  // Ensures no default is selected
+  // ─────────────────────────────────────────────────────────────
+  // 2) Reset in‑memory API store (from api.js)
+  // ─────────────────────────────────────────────────────────────
+  try {
+    if (typeof storedApiData !== 'undefined' && storedApiData) {
+      storedApiData.mobileDetails = null;
+      storedApiData.apiDetails = null;
+      storedApiData.scopeText = null;          // if populated by API
+      storedApiData.partialScopeHTML = null;   // our cached HTML
+      storedApiData.error = null;
+      storedApiData.loading = false;
+      storedApiData.isLoading = false;
+    }
+  } catch (_) {}
 
-  // reset in-memory store exported from api.js
-  storedApiData.apiDetails = null;
-  storedApiData.mobileDetails = null;
-  storedApiData.error = null;
-  storedApiData.loading = false;
-  storedApiData.isLoading = false;
+  // Reset the one-shot startup fetch guard so tests behave like first run
+  try {
+    if (typeof __didFetchApiDataOnStartup !== 'undefined') {
+      __didFetchApiDataOnStartup = false;
+    }
+  } catch (_) {}
 
+  // ─────────────────────────────────────────────────────────────
+  // 3) Reset Rewards UI
+  // ─────────────────────────────────────────────────────────────
+  if (typeof clearRewardsSelection === 'function') {
+    clearRewardsSelection();
+  }
+  const rewardDetailsEl = document.getElementById('rewardDetails');
+  if (rewardDetailsEl) rewardDetailsEl.innerHTML = '';
+
+  // ─────────────────────────────────────────────────────────────
+  // 4) Reset URL entry + validation + buttons
+  // ─────────────────────────────────────────────────────────────
   const urlInput = document.getElementById('websiteUrl');
-  if (urlInput) urlInput.value = '';
+  if (urlInput) {
+    urlInput.value = '';
+    // trigger any listeners that sync button state
+    urlInput.dispatchEvent(new Event('input', { bubbles: true }));
+  }
 
-  alert('🧹 Cleared! Simulating first-time user experience.');
+  // hide validation error if shown
+  if (typeof hideDomainValidationError === 'function') {
+    hideDomainValidationError();
+  } else {
+    const urlError = document.getElementById('urlError');
+    if (urlError) urlError.remove();
+  }
+
+  // disable Generate button until a URL is entered
+  const genBtn = document.getElementById('generateProgramButton');
+  if (genBtn) genBtn.disabled = true;
+
+  // best-effort: disable/clear any API data/view buttons if present
+  const viewApiBtn = document.getElementById('viewApiButton');
+  if (viewApiBtn) viewApiBtn.disabled = true;
+
+  // ─────────────────────────────────────────────────────────────
+  // 5) Clear the final Trix editor/output
+  // ─────────────────────────────────────────────────────────────
+  const finalInput  = document.getElementById('final-step-input');
+  const finalEditor = document.getElementById('finalSummaryContent');
+  if (finalInput) finalInput.value = '';
+  if (finalEditor && finalEditor.editor) {
+    finalEditor.editor.loadHTML('');
+  }
+
+  // remove any previously added Copy button from the Trix toolbar
+  const editor = document.getElementById('finalSummaryContent');
+  if (editor && editor.toolbarElement) {
+    const fileGroup = editor.toolbarElement.querySelector('[data-trix-button-group="file-tools"]');
+    const oldCopy = fileGroup ? fileGroup.querySelector('#copyButton') : null;
+    if (oldCopy) oldCopy.remove();
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // 6) Reset wizard UI back to first page
+  // ─────────────────────────────────────────────────────────────
+  // Rebuild the steps fresh (navigation.js exports this)
+  if (typeof initializeSteps === 'function') {
+    initializeSteps();
+  }
+
+  alert('🧹 Reset complete. Ready for a fresh run.');
 }
 
 // wire up the button
 document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('clearMemoryBtn')
-    ?.addEventListener('click', clearMemoryForNewUserTest);
+  document.getElementById('resetButton')
+    ?.addEventListener('click', performReset);
 });
 
 export { config };

@@ -113,6 +113,11 @@
                 <span class="text-blue-500 cursor-pointer text-sm" tabindex="0">ℹ️</span>
                 <div class="absolute left-full top-1/2 ml-2 -translate-y-1/2 w-80 bg-blue-100 text-black text-sm rounded-lg shadow-lg p-3 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10 border border-blue-300 whitespace-pre-line">
                     You can edit the program text directly.  Please fill in all placeholders marked with square brackets [ ] before finalising the document.
+                    If you delete any of the following lines, the system will not be able to auto-fill those sections:
+                    --START IN-SCOPE--
+                    --END IN-SCOPE--
+                    --START REWARDS--
+                    --END REWARDS--
                 </div>
             </div>
         </div>
@@ -135,31 +140,34 @@
   <div
     id="fixedNavButtons"
     class="fixed bottom-0 left-0 w-full bg-white border-t border-gray-200 shadow-md z-50"
-  >
-    <div class="max-w-2xl mx-auto px-4 py-3 flex justify-end items-center">
+    >
+    <div class="max-w-2xl mx-auto px-4 py-3 flex justify-between items-center">
+      
+      <!-- Left side: Reset + Data -->
+      <div class="flex items-center gap-2">
+        <button
+          id="resetButton"
+          class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 text-sm font-medium"
+        >Reset</button>       
+        <button
+          id="viewDataButton"
+          class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 text-sm font-medium"
+        >🔍 Data</button>
+      </div>
+
+      <!-- Right side: Back + Generate -->
       <div class="flex items-center gap-2">
         <button id="backButton"
-            title="Back"
-            class="bg-blue-200 text-blue-800 px-3 py-2 rounded hover:bg-blue-300 text-sm font-medium">
-          Back (Temp)
-        </button>
-        <button
-          id="clearMemoryBtn"
-          class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 text-sm font-medium"
-        >🧹 Clear Memory (Temp)
-        </button>       
-        <button
-          id="viewApiButton"
-          class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 text-sm font-medium"
-        >🔍 Data
-        </button>
+          title="Back"
+          class="hidden bg-blue-200 text-blue-800 px-3 py-2 rounded hover:bg-blue-300 text-sm font-medium"
+        >Back</button>
         <button
           id="generateProgramButton"
           class="bg-blue-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-blue-700 transition"
           title="Generate program"
-        > Generate Program
-        </button>
+        >Generate Program</button>
       </div>
+
     </div>
   </div>
 
