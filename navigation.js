@@ -58,6 +58,8 @@ function syncGenerateButtonState() {
 
   const hasUrl = !!(urlInput && urlInput.value.trim());
   genBtn.disabled = !hasUrl;
+  genBtn.setAttribute('aria-disabled', String(!hasUrl));
+  genBtn.tabIndex = hasUrl ? 0 : -1; // Remove from tab flow when disabled
 
   // Visual state
   genBtn.classList.toggle('opacity-50', !hasUrl);
@@ -71,23 +73,31 @@ function syncGenerateButtonState() {
 function updateDataButton(stepIndex) {
   const dataBtn = document.getElementById('viewDataButton');
   if (!dataBtn) return;
+
   // If config says "never show", hide permanently
   if (!window.config?.showApiDataButton) {
     dataBtn.classList.add('hidden');
+    dataBtn.setAttribute('aria-hidden', 'true');
+    dataBtn.tabIndex = -1;
     return;
   }
 
-  // Otherwise, show only on Builder step
+  // Otherwise, only show on the Builder step
   const showForStep = (stepIndex === StepIndex.BUILDER);
   dataBtn.classList.toggle('hidden', !showForStep);
+  dataBtn.setAttribute('aria-hidden', String(!showForStep));
+  dataBtn.tabIndex = showForStep ? 0 : -1;
 }
 
 // Show/hide Reset button (config; visible on both steps when enabled)
 function updateResetButton() {
   const resetBtn = document.getElementById('resetButton');
   if (!resetBtn) return;
+
   const show = !!window.config?.showResetButton;
   resetBtn.classList.toggle('hidden', !show);
+  resetBtn.setAttribute('aria-hidden', String(!show));
+  resetBtn.tabIndex = show ? 0 : -1;
 }
 
 // Show/hide Back button (only on FINAL)
