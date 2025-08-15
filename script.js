@@ -577,13 +577,11 @@ function displayScopeText() {
     return;
   }
 
+  // Wire the Copy button once (safe to call repeatedly)
+  ensureCopyButtonOnce();
+
   // Build the finished product
   const scopeHTML = getFinalScopeHTML();
-
-  // Optional: copy button (kept as-is per your current flow)
-  if (typeof addCopyButton === 'function') {
-    addCopyButton();
-  }
 
   // Render into Trix (keep both value + loadHTML for consistency with your existing pattern)
   finalInput.value = scopeHTML;
@@ -628,39 +626,34 @@ function displayScopeText() {
 }*/
 
 // Attach a 📋 Copy button to the *final scope* Trix editor toolbar
-function addCopyButton() {
+// Idempotent: attach a 📋 Copy button to the final Trix toolbar once.
+function ensureCopyButtonOnce() {
   const editor = document.getElementById('finalSummaryContent');
-  if (!editor) {
-    console.warn('[addCopyButton] No editor found yet');
+  if (!editor || !editor.toolbarElement) return;
+
+  // Already wired? bail.
+  if (editor.dataset.copyButtonWired === '1') return;
+
+  const fileGroup = editor.toolbarElement.querySelector('[data-trix-button-group="file-tools"]');
+  if (!fileGroup) return;
+
+  // If a copy button exists (e.g., after a hot reload), mark and exit
+  if (fileGroup.querySelector('#copyButton')) {
+    editor.dataset.copyButtonWired = '1';
     return;
   }
-
-  const toolbar = editor.toolbarElement;
-  if (!toolbar) {
-    console.warn('[addCopyButton] No toolbar found yet');
-    return;
-  }
-
-  const fileGroup = toolbar.querySelector('[data-trix-button-group="file-tools"]');
-  if (!fileGroup) {
-    console.warn('[addCopyButton] No file-tools group found');
-    return;
-  }
-
-  // remove any old copy-button so we don't double-up
-  const old = fileGroup.querySelector('#copyButton');
-  if (old) old.remove();
 
   const btn = document.createElement('button');
   btn.type      = 'button';
   btn.id        = 'copyButton';
   btn.title     = 'Copy to Clipboard';
   btn.className = 'trix-button copy-button';
-  btn.innerHTML = '📋 Copy';
+  btn.textContent = '📋 Copy';
   btn.addEventListener('click', copyFinalSummary);
 
   fileGroup.appendChild(btn);
-  console.log('[addCopyButton] Copy button added');
+  editor.dataset.copyButtonWired = '1';
+  console.log('[copy] Copy button wired');
 }
 
 function showMessageModal(title, message) {
@@ -756,6 +749,8 @@ function performReset() {
       storedApiData.apiDetails = null;
       storedApiData.scopeText = null;          // if populated by API
       storedApiData.partialScopeHTML = null;   // our cached HTML
+      storedApiData.mobileError = null;        // clear per-call errors
+      storedApiData.apiError = null;
       storedApiData.error = null;
       storedApiData.loading = false;
       storedApiData.isLoading = false;
@@ -784,7 +779,7 @@ function performReset() {
   const urlInput = document.getElementById('websiteUrl');
   if (urlInput) {
     urlInput.value = '';
-    // trigger any listeners that sync button state
+    // trigger any listeners that sync button state (Generate disabled, etc.)
     urlInput.dispatchEvent(new Event('input', { bubbles: true }));
   }
 
@@ -792,17 +787,27 @@ function performReset() {
   if (typeof hideDomainValidationError === 'function') {
     hideDomainValidationError();
   } else {
-    const urlError = document.getElementById('urlError');
-    if (urlError) urlError.remove();
+    document.getElementById('urlError')?.remove();
   }
 
-  // disable Generate button until a URL is entered
+  // Explicitly disable Generate until a URL is entered
   const genBtn = document.getElementById('generateProgramButton');
   if (genBtn) genBtn.disabled = true;
 
-  // best-effort: disable/clear any API data/view buttons if present
-  const viewApiBtn = document.getElementById('viewApiButton');
-  if (viewApiBtn) viewApiBtn.disabled = true;
+  // Best-effort: disable/clear any Data button if present
+  const viewDataBtn = document.getElementById('viewDataButton'); // ← updated id
+  if (viewDataBtn) viewDataBtn.disabled = true;
+
+  // Hide inline loading/retry UI if present
+  const loadingEl = document.getElementById('dataLoadingStatus');
+  if (loadingEl) {
+    loadingEl.classList.add('hidden');
+    loadingEl.innerHTML = '';
+  }
+
+  // Close Program Data modal if open
+  const dataModal = document.getElementById('programDataModal');
+  if (dataModal) dataModal.classList.add('hidden');
 
   // ─────────────────────────────────────────────────────────────
   // 5) Clear the final Trix editor/output
@@ -814,23 +819,24 @@ function performReset() {
     finalEditor.editor.loadHTML('');
   }
 
-  // remove any previously added Copy button from the Trix toolbar
-  const editor = document.getElementById('finalSummaryContent');
-  if (editor && editor.toolbarElement) {
-    const fileGroup = editor.toolbarElement.querySelector('[data-trix-button-group="file-tools"]');
-    const oldCopy = fileGroup ? fileGroup.querySelector('#copyButton') : null;
-    if (oldCopy) oldCopy.remove();
+  // Remove Copy button and clear the wired flag (so we can add it once later)
+  if (finalEditor) {
+    if (finalEditor.toolbarElement) {
+      finalEditor.toolbarElement
+        .querySelector('[data-trix-button-group="file-tools"] #copyButton')
+        ?.remove();
+    }
+    finalEditor.dataset.copyButtonWired = '0';
   }
 
   // ─────────────────────────────────────────────────────────────
   // 6) Reset wizard UI back to first page
   // ─────────────────────────────────────────────────────────────
-  // Rebuild the steps fresh (navigation.js exports this)
   if (typeof initializeSteps === 'function') {
     initializeSteps();
   }
 
-  alert('🧹 Reset complete. Ready for a fresh run.');
+  alert('Reset completed successfully.');
 }
 
 // wire up the button
