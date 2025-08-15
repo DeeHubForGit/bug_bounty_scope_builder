@@ -10,8 +10,8 @@ let currentStepIndex = 0;
 let steps = [];
 
 // Callback registered from script.js
-let displayScopeTextFn = null;
-function registerDisplayScopeText(fn) { displayScopeTextFn = fn; }
+let displayScopeFn = null;
+function registerDisplayScope(fn) { displayScopeFn = fn; }
 
 /* ──────────────────────────────────────────────────────────────
    Wiring / Initialization
@@ -133,8 +133,8 @@ function updateGenerateProgramButton(stepIndex) {
     }
   
     // Render final scope only on first entry into FINAL
-    if (changed && stepIndex === StepIndex.FINAL && typeof displayScopeTextFn === 'function') {
-      displayScopeTextFn();
+    if (changed && stepIndex === StepIndex.FINAL && typeof displayScopeFn === 'function') {
+      displayScopeFn();
     }
   
     // ✅ Always run control updates (even on initial paint when stepIndex === 0)
@@ -166,5 +166,5 @@ export {
   showStep,
   goToScope,
   goToBuilder,
-  registerDisplayScopeText,
+  registerDisplayScope,
 };

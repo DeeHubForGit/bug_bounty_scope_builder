@@ -1,5 +1,5 @@
 {
     "showResetButton": true,
-    "showApiDataButton": false,
+    "showApiDataButton": true,
     "apiBasePath": "http://localhost:5000"
 }
