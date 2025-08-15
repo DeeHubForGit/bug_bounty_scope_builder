@@ -306,7 +306,7 @@ function handleLoadApiData() {
  * Display the Scope page
  */
 function displayScope() {
-  displayScopePage();
+  displayScopePage(rewards, scopeText);
 }
 
 function clearRewardsSelection() {

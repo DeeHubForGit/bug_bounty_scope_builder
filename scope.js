@@ -278,10 +278,8 @@ function buildPartialScopeTextFromApi() {
    * Display the final Scope (scope + assets + rewards) in the Trix editor.
    * John’s step 8: “Add the rewards section to the template and show the finished product on the next page.”
    */
-  function displayScopePage() {
+  function displayScopePage(rewards, scopeText) {
     const storedApiData = window.storedApiData || {};
-    const rewards = window.rewards || {};
-    const scopeText = window.scopeText || [];
 
     const finalInput  = document.getElementById('final-step-input');
     const finalEditor = document.getElementById('finalSummaryContent');
