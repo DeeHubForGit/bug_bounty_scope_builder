@@ -1,4 +1,5 @@
 {
-    "showApiDataButton": true,
-    "apiBasePath": "http://207.246.87.60:5000/"
+    "showResetButton": true,
+    "showApiDataButton": false,
+    "apiBasePath": "http://localhost:5000"
 }

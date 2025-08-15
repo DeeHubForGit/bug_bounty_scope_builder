@@ -1,4 +1,5 @@
-// navigation.js — minimal two-step navigator
+// navigation.js — minimal two-step navigator (clean helpers)
+
 const StepIndex = Object.freeze({
   BUILDER: 0,
   FINAL: 1,
@@ -12,28 +13,28 @@ let steps = [];
 let displayScopeTextFn = null;
 function registerDisplayScopeText(fn) { displayScopeTextFn = fn; }
 
-/**
- * Initialize the two steps and show initial state.
- */
+/* ──────────────────────────────────────────────────────────────
+   Wiring / Initialization
+   ────────────────────────────────────────────────────────────── */
 function initializeSteps() {
   const builderStep = document.getElementById('builderContainer');
   const finalStep   = document.getElementById('final-step');
-
   steps = [builderStep, finalStep];
 
-  // Wire Back button to go to the Builder (first) page
+  // Wire Back → Builder
   const backButton = document.getElementById('backButton');
-  if (backButton) {
-    backButton.onclick = goToBuilder;
-  }
+  if (backButton) backButton.onclick = goToBuilder;
 
-  // Wire Back button to go to the Builder (first) page
-  const generateButton = document.getElementById('generateProgramButton');
-  if (generateButton) {
-    generateButton.onclick = goToScope;
-  }
-  
-  // Restore saved step if valid; else show first step
+  // Wire Generate → Scope
+  const genBtn = document.getElementById('generateProgramButton');
+  if (genBtn) genBtn.onclick = goToScope;  
+
+  // Keep Generate visually in sync with URL field presence
+  const urlInput = document.getElementById('websiteUrl');
+  if (urlInput) urlInput.addEventListener('input', syncGenerateButtonState);
+  syncGenerateButtonState(); // initial paint
+
+  // Restore saved step if valid; else show Builder
   const saved = localStorage.getItem('currentStepIndex');
   const savedIdx = Number.parseInt(saved, 10);
   const hasValidSaved =
@@ -45,64 +46,104 @@ function initializeSteps() {
   showStep(hasValidSaved ? savedIdx : StepIndex.BUILDER);
 }
 
-/**
- * Show a specific step and hide others.
- */
-function showStep(stepIndex) {
-  if (stepIndex === currentStepIndex) return; // no-op if already showing
+/* ──────────────────────────────────────────────────────────────
+   Small helpers: one per control
+   ────────────────────────────────────────────────────────────── */
 
-  // Toggle step visibility
-  for (let i = 0; i < steps.length; i++) {
-    const el = steps[i];
-    if (!el) continue;
-    if (i === stepIndex) el.classList.remove('hidden');
-    else el.classList.add('hidden');
-  }
+// Generate button enabled/visual state depends on URL presence
+function syncGenerateButtonState() {
+  const urlInput = document.getElementById('websiteUrl');
+  const genBtn   = document.getElementById('generateProgramButton');
+  if (!genBtn) return;
 
-  currentStepIndex = stepIndex;
-  localStorage.setItem('currentStepIndex', stepIndex);
+  const hasUrl = !!(urlInput && urlInput.value.trim());
+  genBtn.disabled = !hasUrl;
 
-  // If we're showing the final scope step, render its content
-  if (stepIndex === StepIndex.FINAL && typeof displayScopeTextFn === 'function') {
-    displayScopeTextFn();
-  }
-
-  // Show/hide the Data button on the Builder page
-  const dataBtn = document.getElementById('viewDataButton');
-  if (dataBtn) {
-    const showButton = window.config?.showApiDataButton; // same config flag
-    if (stepIndex === StepIndex.BUILDER && showButton) {
-      dataBtn.classList.remove('hidden');
-    } else {
-      dataBtn.classList.add('hidden');
-    }
-  }
-
-  // Hide "Generate Program" button on Scope step
-  const genBtn = document.getElementById('generateProgramButton');
-  if (genBtn) {
-    genBtn.classList.toggle('hidden', stepIndex === StepIndex.FINAL);
-  }
-
-  // Show Back button on FINAL, hide on BUILDER
-  const backButton = document.getElementById('backButton');
-  if (backButton) {
-    backButton.classList.toggle('hidden', stepIndex === StepIndex.BUILDER);
-  }
+  // Visual state
+  genBtn.classList.toggle('opacity-50', !hasUrl);
+  genBtn.classList.toggle('cursor-not-allowed', !hasUrl);
+  genBtn.classList.toggle('bg-blue-600', hasUrl);
+  genBtn.classList.toggle('hover:bg-blue-700', hasUrl);
+  genBtn.classList.toggle('bg-blue-400', !hasUrl);
 }
 
-/**
- * Public: go straight to the Scope (FINAL) screen.
- */
+// Show/hide Data button (config + only on Builder step)
+function updateDataButton(stepIndex) {
+  const dataBtn = document.getElementById('viewDataButton');
+  if (!dataBtn) return;
+  // If config says "never show", hide permanently
+  if (!window.config?.showApiDataButton) {
+    dataBtn.classList.add('hidden');
+    return;
+  }
+
+  // Otherwise, show only on Builder step
+  const showForStep = (stepIndex === StepIndex.BUILDER);
+  dataBtn.classList.toggle('hidden', !showForStep);
+}
+
+// Show/hide Reset button (config; visible on both steps when enabled)
+function updateResetButton() {
+  const resetBtn = document.getElementById('resetButton');
+  if (!resetBtn) return;
+  const show = !!window.config?.showResetButton;
+  resetBtn.classList.toggle('hidden', !show);
+}
+
+// Show/hide Back button (only on FINAL)
+function updateBackButton(stepIndex) {
+  const backButton = document.getElementById('backButton');
+  if (!backButton) return;
+  backButton.classList.toggle('hidden', stepIndex === StepIndex.BUILDER);
+}
+
+// Show/hide Generate button (hidden on FINAL)
+function updateGenerateProgramButton(stepIndex) {
+  const genBtn = document.getElementById('generateProgramButton');
+  if (!genBtn) return;
+  genBtn.classList.toggle('hidden', stepIndex === StepIndex.FINAL);
+}
+
+/* ──────────────────────────────────────────────────────────────
+   Step switching
+   ────────────────────────────────────────────────────────────── */
+   function showStep(stepIndex) {
+    const changed = stepIndex !== currentStepIndex;
+  
+    // Only toggle step visibility if the step actually changed
+    if (changed) {
+      for (let i = 0; i < steps.length; i++) {
+        const el = steps[i];
+        if (!el) continue;
+        if (i === stepIndex) el.classList.remove('hidden');
+        else el.classList.add('hidden');
+      }
+      currentStepIndex = stepIndex;
+      localStorage.setItem('currentStepIndex', stepIndex);
+    }
+  
+    // Render final scope only on first entry into FINAL
+    if (changed && stepIndex === StepIndex.FINAL && typeof displayScopeTextFn === 'function') {
+      displayScopeTextFn();
+    }
+  
+    // ✅ Always run control updates (even on initial paint when stepIndex === 0)
+    updateDataButton(stepIndex);        // respects config and step
+    updateResetButton();                // respects config
+    updateBackButton(stepIndex);        // show on FINAL only
+    updateGenerateProgramButton(stepIndex); // hide on FINAL
+    syncGenerateButtonState();          // keep Generate visual state in sync
+  }  
+
+/* ──────────────────────────────────────────────────────────────
+   Public navigation
+   ────────────────────────────────────────────────────────────── */
 function goToScope() {
   if (currentStepIndex !== StepIndex.FINAL) {
     showStep(StepIndex.FINAL);
   }
 }
 
-/**
- * Public: go straight to the Builder (first) screen.
- */
 function goToBuilder() {
   if (currentStepIndex !== StepIndex.BUILDER) {
     showStep(StepIndex.BUILDER);
@@ -115,5 +156,5 @@ export {
   showStep,
   goToScope,
   goToBuilder,
-  registerDisplayScopeText
+  registerDisplayScopeText,
 };
