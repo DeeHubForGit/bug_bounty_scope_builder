@@ -23,9 +23,9 @@ document.addEventListener('DOMContentLoaded', () => {
       // A) Restore cached API data if present
       loadDataFromLocalStorage();
 
-      // B) If a domain exists and cached API data is missing, preload it  TO DO Remove later if needed
-      //fetchApiDataOnStartup();
-
+      // B) If a domain exists and cached API data is missing, preload it 
+      fetchApiDataOnStartup();
+      
       // C) Initialise UI
       registerDisplayScope(displayScope);
       renderRewardTiers(rewards);
@@ -37,11 +37,13 @@ document.addEventListener('DOMContentLoaded', () => {
       const urlInput = document.getElementById('websiteUrl');
 
       if (genBtn && urlInput) {
-        const syncState = () => {
+        // Set initial state based on existing value (from localStorage restore)
+        genBtn.disabled = !urlInput.value.trim();
+
+        // Update state as user types
+        urlInput.addEventListener('input', () => {
           genBtn.disabled = !urlInput.value.trim();
-        };
-        urlInput.addEventListener('input', syncState);
-        setTimeout(syncState, 50);  // small delay to wait for localStorage restore
+        });
       }
     })
     .catch(error => {
@@ -49,6 +51,102 @@ document.addEventListener('DOMContentLoaded', () => {
       console.error('Error initializing app:', error);
     });
 });
+
+let lastProcessedValue = null;
+let pendingDomain = null;
+let isProcessing = false;
+
+async function handleDomainInput(domain) {
+  if (domain === lastProcessedValue) {
+    console.log("⏭ Domain already processed, skipping: " + domain);
+    return;
+  }
+
+  if (isProcessing) {
+    pendingDomain = domain;
+    return;
+  }
+
+  isProcessing = true;
+  lastProcessedValue = domain;
+
+  if (!isValidDomainOrUrl(domain)) {
+    showDomainValidationError();
+    isProcessing = false;
+    return;
+  }
+
+  hideDomainValidationError();
+
+  try {
+    await loadApiDataInBackground(domain);
+    console.log("✅ API data successfully loaded for", domain);
+    buildPartialScopeTextFromApi();
+  } catch (err) {
+    console.warn("❌ Failed to load API data:", err);
+  } finally {
+    isProcessing = false;
+
+    // If another domain was queued while this was running, process it now
+    if (pendingDomain && pendingDomain !== lastProcessedValue) {
+      const nextDomain = pendingDomain;
+      pendingDomain = null;
+      handleDomainInput(nextDomain);
+    }
+  }
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  const websiteInput = document.getElementById("websiteUrl");
+  if (!websiteInput) return;
+
+  let typingTimeout = null;
+  let userHasTyped = false;
+
+  websiteInput.addEventListener("keydown", function (e) {
+    if (e.key === "Enter") {
+      const domain = websiteInput.value.trim();
+      console.log("Enter " + domain);
+      //setUrlEventsMessage("Enter " + domain);
+
+      if (domain !== lastProcessedValue) {
+        handleDomainInput(domain);
+      }
+    }
+  });
+
+  websiteInput.addEventListener("input", () => {
+    if (!userHasTyped) {
+      userHasTyped = true;
+    }
+
+    clearTimeout(typingTimeout);
+    typingTimeout = setTimeout(() => {
+      const domain = websiteInput.value.trim();
+      console.log("⏳ Typing stopped, loading after 300ms... " + domain);
+      //setUrlEventsMessage("⏳ Typing stopped, loading after 300ms... " + domain);
+
+      if (userHasTyped && domain !== lastProcessedValue) {
+        handleDomainInput(domain);
+      }
+    }, 300);
+  });
+
+  websiteInput.addEventListener("blur", () => {
+    const domain = websiteInput.value.trim();
+    console.log("🕒 Blur event detected: " + domain);
+    //setUrlEventsMessage("🕒 Blur event detected: " + domain);
+
+    if (domain !== lastProcessedValue) {
+      handleDomainInput(domain);
+    }
+  });
+});
+
+function setUrlEventsMessage(message) {
+  const messageEl = document.getElementById("urlEventsMessage");
+  messageEl.textContent = message || ""; // Clear if empty
+}
 
 /**
  * Load config, scope text, and rewards from separate JSON files
@@ -158,25 +256,6 @@ function hideDomainValidationError() {
   }
 }
 
-document.getElementById('websiteUrl').addEventListener('keydown', function (e) {
-  if (e.key === 'Enter') {
-    const domain = this.value.trim();
-
-    if (!isValidDomainOrUrl(domain)) {
-      showDomainValidationError(); 
-      return;
-    }
-
-    hideDomainValidationError();
-    loadApiDataInBackground(domain)
-      .then(() => {
-        console.log("✅ API data successfully loaded for", domain);
-        buildPartialScopeTextFromApi(); 
-      })
-      .catch(err => console.warn("❌ Failed to load API data:", err));
-  }
-});
-
 /**
  * Read and parse a JSON object from localStorage.
  * Returns null if the key does not exist or parsing fails.
@@ -276,7 +355,8 @@ function setupUrlPersistence() {
   const savedUrl = localStorage.getItem('enteredUrl');
   if (savedUrl) {
     urlInput.value = savedUrl;
-    urlInput.dispatchEvent(new Event('input')); // ✅ Only trigger if restoring
+    // Do NOT dispatch 'input' here — it causes unintended loading
+    // urlInput.dispatchEvent(new Event('input')); // ✅ Only trigger if restoring
   }
 
   // Save normalised value on change

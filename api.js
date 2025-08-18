@@ -123,8 +123,13 @@ function showGlobalLoadingMessage() {
 function hideGlobalLoadingMessage() {
   const el = document.getElementById('dataLoadingStatus');
   if (!el) return;
-  el.classList.add('hidden');
-  el.innerHTML = '';
+
+  // Add a small delay to ensure visibility
+  setTimeout(() => {
+    el.classList.add('hidden');
+    el.innerHTML = '';
+  }, 300); // Delay in milliseconds
+  
 }
 
 // Inline “Retry” control next to the arrows
