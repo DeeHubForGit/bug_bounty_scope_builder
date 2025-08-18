@@ -155,6 +155,14 @@ function goToScope() {
 }
 
 function goToBuilder() {
+  if (currentStepIndex === StepIndex.FINAL) {
+    const editor = document.querySelector("trix-editor#finalSummaryContent");
+    if (editor) {
+      const scopeHTML = editor.innerHTML;
+      localStorage.setItem("finalScopeHTML", scopeHTML);
+    }
+  }
+
   if (currentStepIndex !== StepIndex.BUILDER) {
     showStep(StepIndex.BUILDER);
   }

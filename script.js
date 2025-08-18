@@ -177,6 +177,7 @@ async function loadAppConfig() {
     scopeText = scopeJson.scope_text;  // still wrapped
     window.scopeText = scopeText;      // ✅ Make globally available
     rewards   = rewardsJson;           // ✅ already flattened
+    window.rewards = rewards;          // ✅ Make globally available
     config    = configJson;            // ✅ already flattened
     window.config = config;            // ✅ Expose config globally for use in other modules
 

@@ -274,34 +274,57 @@ function buildPartialScopeTextFromApi() {
     return finalHTML;
   }
   
-  /**
-   * Display the final Scope (scope + assets + rewards) in the Trix editor.
-   * John’s step 8: “Add the rewards section to the template and show the finished product on the next page.”
-   */
-  function displayScopePage(rewards, scopeText) {
-    const storedApiData = window.storedApiData || {};
+/**
+ * Display the final Scope (scope + assets + rewards) in the Trix editor.
+ * - If the user has previously edited the scope, their version is restored.
+ * - If the reward tier changed, only the rewards section is regenerated.
+ * - Otherwise, a new version is generated and shown.
+ * 
+ * John’s step 8: “Add the rewards section to the template and show the finished product on the next page.”
+ */
+function displayScopePage(rewards, scopeText) {
+  const storedApiData = window.storedApiData || {};
+  const finalInput = document.getElementById('final-step-input');
+  const finalEditor = document.getElementById('finalSummaryContent');
 
-    const finalInput  = document.getElementById('final-step-input');
-    const finalEditor = document.getElementById('finalSummaryContent');
-    
-    if (!finalInput || !finalEditor || !finalEditor.editor) {
-      console.error('❌ Missing Trix editor elements: #final-step-input and/or #finalSummaryContent');
-      return;
-    }
-    
-    // Wire the Copy button once (safe to call repeatedly)
-    ensureCopyButtonOnce();
-    
-    // Build the finished product
+  if (!finalInput || !finalEditor || !finalEditor.editor) {
+    console.error('❌ Missing Trix editor elements: #final-step-input and/or #finalSummaryContent');
+    return;
+  }
+
+  const selectedTier = localStorage.getItem('selectedRewardTier');
+  const initialTier = localStorage.getItem('initialRewardTier');
+  const hasChangedTier = selectedTier !== initialTier;
+
+  localStorage.setItem('initialRewardTier', selectedTier);
+  ensureCopyButtonOnce();
+
+  let existing = finalInput.value?.trim() || localStorage.getItem('finalScopeHTML');
+
+  if (existing && hasChangedTier) {
+    console.log('♻️ Reward tier changed — replacing only the rewards section.');
+    const newRewards = getRewardsTextForScope(rewards); // assumes it returns wrapped HTML
+
+    // Replace the section between --START REWARDS-- and --END REWARDS--
+    existing = existing.replace(
+      /--START REWARDS--[\s\S]*?--END REWARDS--/,
+      newRewards
+    );
+  }
+
+  if (existing) {
+    console.log('🔁 Displaying scope (existing text with any updates).');
+    finalInput.value = existing;
+    finalInput.dispatchEvent(new Event('input', { bubbles: true }));
+    finalEditor.editor.loadHTML(existing);
+  } else {
+    console.log('🆕 Generating new scope (no saved version).');
     const scopeHTML = getFinalScopeHTML(storedApiData, rewards, scopeText);
-    
-    // Render into Trix (keep both value + loadHTML for consistency with your existing pattern)
     finalInput.value = scopeHTML;
     finalInput.dispatchEvent(new Event('input', { bubbles: true }));
     finalEditor.editor.loadHTML(scopeHTML);
-  
-    console.log('✅ Finished scope displayed in Trix (scope + assets from memory + rewards).');
   }
+}
   
   /**
    * OLD: Display the scope text in the Trix editor (with Assets + Rewards injected)

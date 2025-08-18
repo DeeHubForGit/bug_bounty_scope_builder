@@ -1,3 +1,5 @@
+let loadedRewardTier = null;  // Track the originally loaded tier
+
 /**
  * Render reward tiers based on the loaded data
  */
@@ -8,10 +10,11 @@ function renderRewardTiers(rewards) {
       console.error('Cannot render reward tiers: missing elements or data');
       return;
     }
-  
+
     const tiers = rewards.tiers;
     const savedTier = localStorage.getItem('selectedRewardTier'); // ✅ Restore previous selection
-  
+    loadedRewardTier = savedTier;  // ✅ Store for comparison
+    
     const tierHTML = Object.entries(tiers).map(([key, tier]) => {
       const levels = tier.levels || {};
   
@@ -77,45 +80,46 @@ function setupRewardTierListeners() {
     });
   }  
 
-function buildRewardsTextFromTier(tierKey, rewards, options = {}) {
-  const { stripAmounts = false } = options;
-  const tiers = rewards?.tiers || {};
-  const tier = tiers[tierKey];
-  const defs = rewards.definitions || {};
-  const exs  = rewards.examples || {};
-
-  if (!tier) return '';
-
-  let lines = [];
-
-  lines.push('--START REWARDS--<br><strong>Rewards</strong>');
-  lines.push('We offer bounties based on the severity and impact of the vulnerability:');
-
-  Object.entries(tier.levels || {}).forEach(([severity, amount]) => {
-    const label = severity.charAt(0).toUpperCase() + severity.slice(1);
-    const def = (defs[severity] || '').trim();
-    const exArr = Array.isArray(exs[severity]) ? exs[severity] : (exs[severity] ? [exs[severity]] : []);
-    const exTxt = exArr.join(', ').trim();
-
-    let displayAmount = amount;
-    if (stripAmounts) {
-      displayAmount = '$[Lower Range]–$[Upper Range]';
-    }
-
-    let line = `<br><strong>${label}`;
-    if (displayAmount) line += `: ${displayAmount}`;
-    if (def) line += ` – ${def}`;
-    line += '</strong>';
-    lines.push(line);
-
-    if (exTxt) lines.push(exTxt);
-  });
-
-  lines.push('<br><em>Note: Reports without clear security implications or that require unrealistic attack scenarios will not be rewarded.</em>');
-  lines.push('--END REWARDS--');
-
-  return lines.join('<br>').replace(/(<br>\s*){3,}/g, '<br><br>');
-}  
+  function buildRewardsTextFromTier(tierKey, rewards, options = {}) {
+    const { stripAmounts = false } = options;
+  
+    const tiers = rewards?.tiers || {};
+    const tier = tiers[tierKey];
+    const defs = rewards?.definitions || {};
+    const exs  = rewards?.examples || {};
+  
+    if (!tier) return '';
+  
+    let lines = [];
+  
+    lines.push('--START REWARDS--<br><strong>Rewards</strong>');
+    lines.push('We offer bounties based on the severity and impact of the vulnerability:');
+  
+    Object.entries(tier.levels || {}).forEach(([severity, amount]) => {
+      const label = severity.charAt(0).toUpperCase() + severity.slice(1);
+      const def = (defs[severity] || '').trim();
+      const exArr = Array.isArray(exs[severity]) ? exs[severity] : (exs[severity] ? [exs[severity]] : []);
+      const exTxt = exArr.join(', ').trim();
+  
+      let displayAmount = amount;
+      if (stripAmounts) {
+        displayAmount = '$[Lower Range]–$[Upper Range]';
+      }
+  
+      let line = `<br><strong>${label}`;
+      if (displayAmount) line += `: ${displayAmount}`;
+      if (def) line += ` – ${def}`;
+      line += '</strong>';
+      lines.push(line);
+  
+      if (exTxt) lines.push(exTxt);
+    });
+  
+    lines.push('<br><em>Note: Reports without clear security implications or that require unrealistic attack scenarios will not be rewarded.</em>');
+    lines.push('--END REWARDS--');
+  
+    return lines.join('<br>').replace(/(<br>\s*){3,}/g, '<br><br>');
+  }  
 
 /**
  * Build the full Rewards text for the Scope step (Trix-friendly, no extra blanks)
