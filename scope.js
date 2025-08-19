@@ -232,6 +232,15 @@ function buildPartialScopeTextFromApi() {
       console.log('✅ Loaded partial scope from localStorage');
     }
   }
+
+  // Persist final scope HTML helper
+  function setFinalScopeHTML(html) {
+    if (!html) return;
+    localStorage.setItem('finalScopeHTML', html);
+    if (window.storedApiData) {
+      window.storedApiData.finalScopeHTML = html;
+    }
+  }
   
   /**
    * Return the final Scope HTML by combining:
@@ -317,12 +326,14 @@ function displayScopePage(rewards, scopeText) {
     finalInput.value = existing;
     finalInput.dispatchEvent(new Event('input', { bubbles: true }));
     finalEditor.editor.loadHTML(existing);
+    setFinalScopeHTML(existing); // keep storage in sync
   } else {
     console.log('🆕 Generating new scope (no saved version).');
     const scopeHTML = getFinalScopeHTML(storedApiData, rewards, scopeText);
     finalInput.value = scopeHTML;
     finalInput.dispatchEvent(new Event('input', { bubbles: true }));
     finalEditor.editor.loadHTML(scopeHTML);
+    setFinalScopeHTML(scopeHTML); // save initial render
   }
 }
   

@@ -45,6 +45,9 @@ document.addEventListener('DOMContentLoaded', () => {
           genBtn.disabled = !urlInput.value.trim();
         });
       }
+
+      // E) Set up autosave so scope is saved when the form is closed
+      setupScopeAutosave();
     })
     .catch(error => {
       // If initialization fails, log the error for debugging
@@ -390,6 +393,56 @@ function displayScope() {
   displayScopePage(rewards, scopeText);
 }
 
+/* ================================
+   Autosave for final scope content
+   ================================ */
+
+// Get the current scope HTML from the final Trix editor
+function getFinalScopeHTMLFromEditor() {
+  const el = document.getElementById('finalSummaryContent');
+  if (!el) return null;
+  const html = (el.innerHTML || '').trim();
+  return html && html.length ? html : null;
+}
+
+// Persist the current final scope HTML if present
+function persistFinalScopeHTML() {
+  try {
+    const html = getFinalScopeHTMLFromEditor();
+    if (html) {
+      localStorage.setItem('finalScopeHTML', html);
+      // Optional mirror to in‑memory store
+      if (window.storedApiData) {
+        window.storedApiData.finalScopeHTML = html;
+      }
+      // console.log('[autosave] finalScopeHTML saved');
+    }
+  } catch (e) {
+    console.warn('[autosave] persist failed:', e);
+  }
+}
+
+// Wire up autosave on page close, tab hide, and editor changes
+function setupScopeAutosave() {
+  // Save when navigating away or closing
+  window.addEventListener('beforeunload', persistFinalScopeHTML);
+  window.addEventListener('pagehide', persistFinalScopeHTML);
+
+  // Save when page becomes hidden
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      persistFinalScopeHTML();
+    }
+  });
+
+  // Save on any change in the final Trix editor
+  document.addEventListener('trix-change', (e) => {
+    if (e.target && e.target.id === 'finalSummaryContent') {
+      persistFinalScopeHTML();
+    }
+  });
+}
+
 function clearRewardsSelection() {
   const rewardTierCards = document.querySelectorAll('.reward-tier-card');
 
@@ -414,7 +467,8 @@ function performReset() {
     'sectionCounts',
     'currentStepIndex',
     'selectedRewardTier',
-    'partialScopeHTML'
+    'partialScopeHTML',
+    'finalScopeHTML' // ← clear saved scope too
   ];
   keysToRemove.forEach(k => localStorage.removeItem(k));
 
@@ -432,6 +486,7 @@ function performReset() {
       storedApiData.apiDetails = null;
       storedApiData.scopeText = null;          // if populated by API
       storedApiData.partialScopeHTML = null;   // our cached HTML
+      storedApiData.finalScopeHTML = null;     // final cached HTML
       storedApiData.mobileError = null;        // clear per-call errors
       storedApiData.apiError = null;
       storedApiData.error = null;
