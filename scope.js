@@ -402,11 +402,17 @@ function displayScopePage(rewards, scopeText) {
     console.log('[copy] Copy button wired');
   }
   
-  function showMessageModal(title, message) {
+  export function showMessageModal(title, message) {
     const modal = document.getElementById('messageModal');
     const titleEl = document.getElementById('messageModalTitle');
     const bodyEl = document.getElementById('messageModalBody');
     const closeBtn = document.getElementById('closeMessageModal');
+  
+    if (!modal || !titleEl || !bodyEl || !closeBtn) {
+      console.warn('[modal] Elements missing; falling back to alert.');
+      alert(message || 'Notice'); // last‑ditch fallback
+      return;
+    }
   
     titleEl.textContent = title || 'Notice';
     bodyEl.textContent = message || '';
@@ -415,7 +421,7 @@ function displayScopePage(rewards, scopeText) {
     closeBtn.onclick = () => {
       modal.classList.add('hidden');
     };
-  }
+  }  
   
   // Copy button 
   function copyFinalSummary() {

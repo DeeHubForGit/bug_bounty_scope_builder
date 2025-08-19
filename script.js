@@ -1,7 +1,7 @@
 import { initializeSteps, registerDisplayScope, goToScope } from './navigation.js';
 import { renderRewardTiers } from './rewards.js';
 import { loadApiDataInBackground, storedApiData } from './api.js';
-import { displayScopePage, buildPartialScopeTextFromApi } from './scope.js';
+import { displayScopePage, buildPartialScopeTextFromApi, showMessageModal } from './scope.js';
 
 // Data is split into three JSON files:
 // - config.json for app settings
@@ -13,6 +13,9 @@ let scopeText = null;
 let rewards = null;
 
 let __didFetchApiDataOnStartup = false;
+
+let typingTimeout = null;
+let userHasTyped = false;
 
 // Run this once the DOM is fully loaded
 document.addEventListener('DOMContentLoaded', () => {
@@ -102,9 +105,6 @@ async function handleDomainInput(domain) {
 document.addEventListener("DOMContentLoaded", () => {
   const websiteInput = document.getElementById("websiteUrl");
   if (!websiteInput) return;
-
-  let typingTimeout = null;
-  let userHasTyped = false;
 
   websiteInput.addEventListener("keydown", function (e) {
     if (e.key === "Enter") {
@@ -203,17 +203,6 @@ async function loadAppConfig() {
     throw error;
   }
 }  
-
-const websiteUrlInput = document.getElementById('websiteUrl');
-const generateButton = document.getElementById('generateProgramButton');
-
-function debounce(func, wait) {
-  let timeout;
-  return function (...args) {
-    clearTimeout(timeout);
-    timeout = setTimeout(() => func.apply(this, args), wait);
-  };
-}
 
 const validTlds = new Set([
   'com', 'net', 'org', 'gov', 'edu', 'info', 'biz',
@@ -458,6 +447,17 @@ function clearRewardsSelection() {
 
 function performReset() {
   // ─────────────────────────────────────────────────────────────
+  // 0) Stop any URL debounce/processing and reset flags
+  // ─────────────────────────────────────────────────────────────
+  if (typingTimeout) {
+    clearTimeout(typingTimeout);
+    typingTimeout = null;
+  }
+  userHasTyped = false;
+  lastProcessedValue = null;
+  pendingDomain = null;
+
+  // ─────────────────────────────────────────────────────────────
   // 1) Clear localStorage keys used by the current app
   // ─────────────────────────────────────────────────────────────
   const keysToRemove = [
@@ -468,7 +468,7 @@ function performReset() {
     'currentStepIndex',
     'selectedRewardTier',
     'partialScopeHTML',
-    'finalScopeHTML' // ← clear saved scope too
+    'finalScopeHTML'
   ];
   keysToRemove.forEach(k => localStorage.removeItem(k));
 
@@ -485,9 +485,9 @@ function performReset() {
       storedApiData.mobileDetails = null;
       storedApiData.apiDetails = null;
       storedApiData.scopeText = null;          // if populated by API
-      storedApiData.partialScopeHTML = null;   // our cached HTML
+      storedApiData.partialScopeHTML = null;   // cached HTML (assets-injected)
       storedApiData.finalScopeHTML = null;     // final cached HTML
-      storedApiData.mobileError = null;        // clear per-call errors
+      storedApiData.mobileError = null;
       storedApiData.apiError = null;
       storedApiData.error = null;
       storedApiData.loading = false;
@@ -512,28 +512,25 @@ function performReset() {
   if (rewardDetailsEl) rewardDetailsEl.innerHTML = '';
 
   // ─────────────────────────────────────────────────────────────
-  // 4) Reset URL entry + validation + buttons
+  // 4) Reset URL entry + validation + buttons (no synthetic events)
   // ─────────────────────────────────────────────────────────────
   const urlInput = document.getElementById('websiteUrl');
   if (urlInput) {
-    urlInput.value = '';
-    // trigger any listeners that sync button state (Generate disabled, etc.)
-    urlInput.dispatchEvent(new Event('input', { bubbles: true }));
+    urlInput.value = ''; // do NOT dispatch 'input'
   }
 
-  // hide validation error if shown
+  // Hide validation error if shown
   if (typeof hideDomainValidationError === 'function') {
     hideDomainValidationError();
   } else {
     document.getElementById('urlError')?.remove();
   }
 
-  // Explicitly disable Generate until a URL is entered
-  const genBtn = document.getElementById('generateProgramButton');
-  if (genBtn) genBtn.disabled = true;
+  // Disable buttons explicitly
+  const generateBtn = document.getElementById('generateProgramButton');
+  if (generateBtn) generateBtn.disabled = true;
 
-  // Best-effort: disable/clear any Data button if present
-  const viewDataBtn = document.getElementById('viewDataButton'); // ← updated id
+  const viewDataBtn = document.getElementById('viewDataButton');
   if (viewDataBtn) viewDataBtn.disabled = true;
 
   // Hide inline loading/retry UI if present
@@ -574,7 +571,14 @@ function performReset() {
     initializeSteps();
   }
 
-  alert('Reset completed successfully.');
+  // ─────────────────────────────────────────────────────────────
+  // 7) Notify with our standard modal
+  // ─────────────────────────────────────────────────────────────
+  if (typeof showMessageModal === 'function') {
+    showMessageModal('Reset', 'Reset completed successfully.');
+  } else {
+    alert('Reset completed successfully.'); // fallback
+  }
 }
 
 // wire up the button
