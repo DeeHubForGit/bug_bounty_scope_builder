@@ -1,8 +1,12 @@
 // api.js — Centralized API calls
-import { config } from './script.js';
+// Avoid hard circular import; prefer window.config if available.
+import { config as importedConfig } from './script.js';
 
 function getApiBaseUrl() {
-  return config?.apiBasePath?.replace(/\/$/, '') || '';
+  const cfg = (typeof window !== 'undefined' && window.config) ? window.config : importedConfig;
+  const base = cfg?.apiBasePath?.replace(/\/$/, '') || '';
+  if (!base) console.warn('api.js: apiBasePath is empty — requests will hit relative paths.');
+  return base;
 }
 
 // Live: http://207.246.87.60:5000  Local: http://localhost:5000
@@ -23,8 +27,56 @@ const storedApiData = {
   isLoading: false,
   error: null,
   mobileDetails: null,
-  apiDetails: null
-};  
+  apiDetails: null,
+  // ✅ initialize these so UI checks are consistent
+  mobileError: null,
+  apiError: null
+}; 
+
+// ─────────────────────────────────────────────────────────────
+// JSON validation helpers (treat 200-with-error as failure)
+// ─────────────────────────────────────────────────────────────
+function getJsonErrorMessage(json, fallback) {
+  if (!json) return fallback || 'Unknown error';
+  if (typeof json.notes === 'string' && json.notes.includes('❌')) return json.notes;
+  if (typeof json.error === 'string' && json.error) return json.error;
+  if (json.message) return json.message;
+  return fallback || 'Request failed';
+}
+
+function isApiDetailsEmpty(json) {
+  const apiUrls   = Array.isArray(json?.apiUrls) ? json.apiUrls : [];
+  const docs      = Array.isArray(json?.documentationUrls) ? json.documentationUrls : [];
+  const suggested = json?.suggestedApi;
+  return apiUrls.length === 0 && docs.length === 0 && !suggested;
+}
+
+function validateApiDetailsPayload(json) {
+  if (!json) return { error: true, message: 'Empty response' };
+  if (json.error) return { error: true, message: getJsonErrorMessage(json) };
+  if (typeof json.notes === 'string' && json.notes.includes('❌')) {
+    return { error: true, message: json.notes };
+  }
+  if (isApiDetailsEmpty(json)) {
+    return { error: true, message: 'No API details found' };
+  }
+  return { error: false };
+}
+
+function validateMobilePayload(json) {
+  if (!json) return { error: true, message: 'Empty response' };
+  if (json.error) return { error: true, message: getJsonErrorMessage(json) };
+  if (typeof json.notes === 'string' && json.notes.includes('❌')) {
+    return { error: true, message: json.notes };
+  }
+  return { error: false };
+}
+
+function normalizeDomain(input = '') {
+  let s = String(input).trim().toLowerCase();
+  s = s.replace(/^https?:\/\//, '').replace(/^www\./, '');
+  return s.split('/')[0];
+}
 
 // api.js — make the Data button DISPLAY‑ONLY (no fetches)
 function wireDataButtonDisplayOnly() {
@@ -53,61 +105,79 @@ function wireDataButtonDisplayOnly() {
 document.addEventListener('DOMContentLoaded', wireDataButtonDisplayOnly);
 
 /**
- * Wrap fetch in a timeout.
- */
-function fetchWithTimeout(url, options = {}) {
-  return new Promise((resolve, reject) => {
-    const controller = new AbortController();
-    const signal = controller.signal;
-
-    const timeout = setTimeout(() => {
-      controller.abort();
-      reject(new Error("Request timed out"));
-    }, API_TIMEOUT);
-
-    fetch(url, { ...options, signal })
-      .then(res => {
-        clearTimeout(timeout);
-        resolve(res);
-      })
-      .catch(err => {
-        clearTimeout(timeout);
-        reject(err);
-      });
-  });
-}
-
-/**
  * POST request to baseURL + endpoint
  */
-async function makeApiRequest(endpoint, body) {
-  const cleanEndpoint = endpoint.replace(/^\//, "");
-  const url = `${getApiBaseUrl()}/${cleanEndpoint}`;
-  console.log(`→ Fetching ${url}`, body);
+async function makeApiRequest(endpoint, body, opts = {}) {
+  const { signal, validate, timeoutMs = API_TIMEOUT } = opts;
+  const url = `${getApiBaseUrl()}/${endpoint}`;
+  console.log('→ Fetching', url, body);
+
+  const ac = new AbortController();
+
+  // Chain caller's signal to our controller
+  if (signal) {
+    if (signal.aborted) {
+      ac.abort(signal.reason || new DOMException('aborted', 'AbortError'));
+    } else {
+      signal.addEventListener(
+        'abort',
+        () => ac.abort(signal.reason || new DOMException('aborted', 'AbortError')),
+        { once: true }
+      );
+    }
+  }
+
+  // Proper timeout AbortError
+  const timeoutId = setTimeout(
+    () => ac.abort(new DOMException('timeout', 'AbortError')),
+    timeoutMs
+  );
 
   try {
-    const res = await fetchWithTimeout(url, {
+    const res = await fetch(url, {
       ...FETCH_OPTIONS,
-      method: "POST",
+      method: 'POST',
       body: JSON.stringify(body),
+      signal: ac.signal
     });
 
-    console.log(`← ${url} responded ${res.status}`);
-    if (!res.ok) throw new Error(`Server error ${res.status}`);
+    clearTimeout(timeoutId);
+    console.log('←', url, 'responded', res.status);
 
-    return res.json();
-  } catch (err) {
-    const isTimeout = err.name === "AbortError" || err.message.includes("timed out");
+    if (!res.ok) {
+      return { error: true, message: `HTTP ${res.status} ${res.statusText}` };
+    }
+
+    const json = await res.json();
+
+    // Payload-level validation
+    if (typeof validate === 'function') {
+      const verdict = validate(json);
+      if (verdict?.error) {
+        return { error: true, message: verdict.message || getJsonErrorMessage(json) };
+      }
+    } else if (typeof json?.notes === 'string' && json.notes.includes('❌')) {
+      return { error: true, message: json.notes };
+    }
+
+    return json;
+  } catch (e) {
+    const isAbort = e?.name === 'AbortError';
+    const isTimeout = isAbort && String(e?.message || '').toLowerCase().includes('timeout');
+    if (isAbort && !isTimeout) throw e; // caller-aborted — let outer logic see AbortError
+
     return {
       error: true,
       message: isTimeout
         ? `Request timed out after ${API_TIMEOUT / 1000} seconds`
-        : `Connection failed: ${err.message}`,
+        : `Connection failed: ${e?.message || 'Network error'}`,
       details: isTimeout
-        ? "API server did not respond in time."
-        : "Could not connect to API server.",
-      originalError: err.toString(),
+        ? 'API server did not respond in time.'
+        : 'Could not connect to API server.',
+      originalError: String(e)
     };
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
@@ -169,9 +239,12 @@ function showDataRetryButton(domainOrOptions, maybeErrorMsg, maybeRetryFnName) {
     lineMsg = `Error occurred retrieving program data`;
   }
 
-  // safe tooltip html
+  // safe tooltip html — include & first
   const safeError = String(errorMsg || 'Unknown error')
-    .replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
     .replace(/\n/g,'<br>');
 
   el.classList.remove('hidden');
@@ -225,9 +298,13 @@ function setLoadingStateForInitialStep(isLoading) {
 }
 
 function showApiResultsPopup() {
-  const modal       = document.getElementById('programDataModal');
-  const contentArea = document.getElementById('programDataModalContent');
-  const closeBtn    = document.getElementById('closeProgramDataModal');
+  const modal = document.getElementById('programDataModal');
+  // Fallback to legacy ID if needed
+  const contentArea =
+    document.getElementById('programDataModalContent') ||
+    document.getElementById('programDataContent') ||
+    modal;
+  const closeBtn = document.getElementById('closeProgramDataModal');
 
   if (!modal || !contentArea || !closeBtn) {
     console.error("⚠️ Program Data modal elements missing");
@@ -262,6 +339,24 @@ function showApiResultsPopup() {
   } else {
     // No cached data — show a friendly notice
     contentArea.innerHTML = renderNoDataMessage();
+  }
+
+  // Wire up the Retry button inside the modal (if present)
+  const retryBtn = contentArea.querySelector('#retryApiButton');
+  if (retryBtn) {
+    retryBtn.onclick = (e) => {
+      e.preventDefault();
+      // Prefer a global handler if your app exposes one
+      if (typeof window.handleLoadApiData === 'function') {
+        window.handleLoadApiData();
+      } else {
+        // fallback: re-use last entered domain via background loader
+        const domain = (localStorage.getItem('enteredUrl') || '').trim();
+        if (domain) loadApiDataInBackground(domain);
+      }
+      // keep modal open so user sees updates; close if you prefer
+      // modal.classList.add('hidden');
+    };
   }
 
   // Show modal
@@ -338,19 +433,33 @@ function renderNoDataMessage() {
   `;
 }
 
+// Global (per-page) slot to track the latest background load + controllers
+window.__apiLoadState = window.__apiLoadState || { seq: 0, mobileCtrl: null, apiCtrl: null };
+
 // Function to load API data in the background and handle state updates
-async function loadApiDataInBackground() {
-  // Resolve domain from saved value
-  const domain = (localStorage.getItem('enteredUrl') || '').trim();
+async function loadApiDataInBackground(domainArg) {
+  // Prefer provided domain; fall back to localStorage.
+  const domainRaw = domainArg || (localStorage.getItem('enteredUrl') || '').trim();
+  const domain = normalizeDomain(domainRaw);
+
   if (!domain) {
     console.warn('ℹ️ No domain saved; aborting API load.');
-    return;
+    return { status: 'noop' };
   }
 
-  // Disable nav + data changes while loading
+  // Cancel in-flight
+  try { window.__apiLoadState.mobileCtrl?.abort(); } catch {}
+  try { window.__apiLoadState.apiCtrl?.abort(); } catch {}
+  const mobileCtrl = new AbortController();
+  const apiCtrl    = new AbortController();
+  const mySeq = ++window.__apiLoadState.seq;
+  window.__apiLoadState.mobileCtrl = mobileCtrl;
+  window.__apiLoadState.apiCtrl    = apiCtrl;
+
+  // UI: loading
   setLoadingStateForInitialStep(true);
 
-  // Update state to loading
+// Update state to loading
   storedApiData.loading = true;
   storedApiData.isLoading = true;
   storedApiData.error = null;
@@ -360,6 +469,13 @@ async function loadApiDataInBackground() {
   // Show loading indicators
   showGlobalLoadingMessage();
 
+  const finishIfCurrent = () => {
+    if (mySeq === window.__apiLoadState.seq) {
+      hideGlobalLoadingMessage();
+      setLoadingStateForInitialStep(false);
+    }
+  };
+
   try {
     console.log("Loading API data in background for domain:", domain);
 
@@ -368,39 +484,60 @@ async function loadApiDataInBackground() {
     if (savedData) {
       try {
         const parsed = JSON.parse(savedData);
+        if (mySeq !== window.__apiLoadState.seq) return { status: 'stale' };
+
         storedApiData.mobileDetails = parsed.mobileDetails || null;
-        storedApiData.apiDetails = parsed.apiDetails || null;
+        storedApiData.apiDetails    = parsed.apiDetails || null;
         storedApiData.loading = false;
         storedApiData.isLoading = false;
         storedApiData.error = null;
         storedApiData.mobileError = null;
         storedApiData.apiError = null;
-        hideGlobalLoadingMessage();
-        setLoadingStateForInitialStep(false);
-        return;
-      } catch {
-        // Fall through to fresh fetch
-      }
+
+        finishIfCurrent();
+        console.log("✅ Loaded cached API data for", domain);
+        return { status: 'cached' };
+      } catch { /* continue to fetch */ }
     }
 
-    // Fetch both in parallel
-    const [mobileRes, apiRes] = await Promise.all([
-      fetchMobileAppDetailsForDomain(domain),
-      fetchApiDetails(domain)
+    // Fetch both in parallel with abort support
+    const [mobileRes, apiRes] = await Promise.allSettled([
+      fetchMobileAppDetailsForDomain(domain, { signal: mobileCtrl.signal }),
+      fetchApiDetails(domain, { signal: apiCtrl.signal })
     ]);
 
-    // Determine failures
-    const mobileError = !!(mobileRes && mobileRes.error);
-    const apiError    = !!(apiRes && apiRes.error);
+    if (mySeq !== window.__apiLoadState.seq) return { status: 'stale' };
 
-    // If both calls failed, surface a visible error + retry
+    const mobileOk  = mobileRes.status === 'fulfilled' && mobileRes.value && !mobileRes.value.error;
+    const apiOk     = apiRes.status === 'fulfilled'    && apiRes.value    && !apiRes.value.error;
+    const mobileVal = mobileOk ? mobileRes.value : (mobileRes.status === 'fulfilled' ? mobileRes.value : null);
+    const apiVal    = apiOk    ? apiRes.value    : (apiRes.status === 'fulfilled'    ? apiRes.value    : null);
+
+    const bothAborted =
+      (mobileRes.status === 'rejected' && mobileRes.reason?.name === 'AbortError') &&
+      (apiRes.status === 'rejected'    && apiRes.reason?.name    === 'AbortError');
+    if (bothAborted) return { status: 'aborted' };
+
+    const mobileError =
+      (mobileRes.status === 'rejected' && mobileRes.reason?.name !== 'AbortError') ||
+      (mobileRes.status === 'fulfilled' && mobileVal && mobileVal.error);
+    const apiError =
+      (apiRes.status === 'rejected' && apiRes.reason?.name !== 'AbortError') ||
+      (apiRes.status === 'fulfilled' && apiVal && apiVal.error);
+
+    const mobileReason = mobileError
+      ? ((mobileRes.status === 'rejected' && mobileRes.reason?.message) ||
+         mobileVal?.message || mobileVal?.error || "Failed to fetch")
+      : null;
+
+    const apiReason = apiError
+      ? ((apiRes.status === 'rejected' && apiRes.reason?.message) ||
+         apiVal?.message || apiVal?.error || "Failed to fetch")
+      : null;
+
     if (mobileError && apiError) {
-      const mobileReason = mobileRes?.message || mobileRes?.error || "Failed to fetch";
-      const apiReason    = apiRes?.message || apiRes?.error || "Failed to fetch";
-
-      storedApiData.mobileError = mobileReason; // <-- set for inline message
-      storedApiData.apiError    = apiReason;    // <-- set for inline message
-
+      storedApiData.mobileError = mobileReason;
+      storedApiData.apiError    = apiReason;
       storedApiData.loading = false;
       storedApiData.isLoading = false;
       storedApiData.error = {
@@ -408,25 +545,17 @@ async function loadApiDataInBackground() {
         details: `Mobile: ${mobileReason}  API: ${apiReason}`,
         timestamp: Date.now()
       };
-
-      hideGlobalLoadingMessage();
-      setLoadingStateForInitialStep(false);
+      finishIfCurrent();
       showDataRetryButton({ domain, errorMsg: storedApiData.error.details });
-      return;
+      console.warn("❌ API background load failed:", storedApiData.error.details);
+      return { status: 'error', details: storedApiData.error.details };
     }
 
-    // At least one succeeded — persist whatever we got
-    storedApiData.mobileDetails = mobileError ? null : mobileRes;
-    storedApiData.apiDetails    = apiError ? null : apiRes;
-
-    // ✅ set specific error strings for partial failures (so inline line is precise)
-    storedApiData.mobileError = mobileError
-      ? (mobileRes?.message || mobileRes?.error || "Failed to fetch")
-      : null;
-    storedApiData.apiError = apiError
-      ? (apiRes?.message || apiRes?.error || "Failed to fetch")
-      : null;
-
+    // Partial or full success
+    storedApiData.mobileDetails = mobileError ? null : mobileVal;
+    storedApiData.apiDetails    = apiError ? null : apiVal;
+    storedApiData.mobileError   = mobileReason;
+    storedApiData.apiError      = apiReason;
     storedApiData.loading = false;
     storedApiData.isLoading = false;
     storedApiData.error = null;
@@ -441,19 +570,26 @@ async function loadApiDataInBackground() {
       console.error("Error saving API data to localStorage:", saveError);
     }
 
-    hideGlobalLoadingMessage();
-    setLoadingStateForInitialStep(false);
+    finishIfCurrent();
 
-    // If one piece failed, still show inline retry with precise message
-    if (mobileError || apiError) {
+    if (!mobileError && !apiError) {
+      console.log(`✅ API data successfully loaded for ${domain}`);
+      return { status: 'ok' };
+    } else {
       const parts = [];
-      if (mobileError) parts.push(`Mobile: ${storedApiData.mobileError}`);
-      if (apiError) parts.push(`API: ${storedApiData.apiError}`);
-      showDataRetryButton({ domain, errorMsg: parts.join('  ') });
+      if (mobileError) parts.push(`Mobile: ${mobileReason}`);
+      if (apiError) parts.push(`API: ${apiReason}`);
+      const msg = parts.join('  ');
+      console.warn(`⚠️ API data partially loaded for ${domain} — ${msg}`);
+      showDataRetryButton({ domain, errorMsg: msg });
+      return { status: 'partial', details: msg };
     }
 
   } catch (error) {
+    if (error?.name === 'AbortError') return { status: 'aborted' };
     console.error("Error fetching API data in background:", error);
+    if (mySeq !== window.__apiLoadState.seq) return { status: 'stale' };
+
     storedApiData.loading = false;
     storedApiData.isLoading = false;
     storedApiData.error = {
@@ -462,9 +598,9 @@ async function loadApiDataInBackground() {
       timestamp: Date.now()
     };
 
-    hideGlobalLoadingMessage();
-    setLoadingStateForInitialStep(false);
+    finishIfCurrent();
     showDataRetryButton({ domain, errorMsg: `${storedApiData.error.message} — ${storedApiData.error.details}` });
+    return { status: 'error', details: storedApiData.error.message };
   }
 }
 
@@ -474,20 +610,29 @@ async function loadApiDataInBackground() {
 export async function fetchMobileAppDetailsForDomain(
   domain,
   search_mode = "app_name",
-  retrieve_android_version = false
+  retrieve_android_version = false,
+  opts = {}
 ) {
-  return makeApiRequest("mobile-app-details-for-domain", {
-    domain,
-    search_mode,
-    retrieve_android_version
-  });
+  if (typeof search_mode === 'object' && search_mode !== null) {
+    opts = search_mode; search_mode = "app_name"; retrieve_android_version = false;
+  }
+  return makeApiRequest(
+    "mobile-app-details-for-domain",
+    { domain: normalizeDomain(domain), search_mode, retrieve_android_version },
+    { signal: opts.signal, validate: validateMobilePayload }
+  );
 }
 
 /**
  * Public export: fetch API details
  */
-export async function fetchApiDetails(domain) {
-  return makeApiRequest("api-details", { domain });
+export async function fetchApiDetails(domain, opts = {}) {
+  if (opts && typeof opts !== 'object') opts = {};
+  return makeApiRequest(
+    "api-details",
+    { domain: normalizeDomain(domain) },
+    { signal: opts.signal, validate: validateApiDetailsPayload }
+  );
 }
 
 // Publicly exported API functions

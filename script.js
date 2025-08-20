@@ -1,4 +1,4 @@
-import { initializeSteps, registerDisplayScope, goToScope } from './navigation.js';
+import { initializeSteps, registerDisplayScope } from './navigation.js';
 import { renderRewardTiers } from './rewards.js';
 import { loadApiDataInBackground, storedApiData } from './api.js';
 import { displayScopePage, buildPartialScopeTextFromApi, showMessageModal } from './scope.js';
@@ -58,60 +58,120 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
+// ─────────────────────────────────────────────────────────────
+// State for URL processing
+// ─────────────────────────────────────────────────────────────
 let lastProcessedValue = null;
 let pendingDomain = null;
 let isProcessing = false;
 
-async function handleDomainInput(domain) {
-  if (domain === lastProcessedValue) {
-    console.log("⏭ Domain already processed, skipping: " + domain);
+/**
+ * Call the background loader, interpret its result, and update the UI.
+ * Returns the status string from loadApiDataInBackground.
+ */
+async function loadAndProcessApiData(domain) {
+  const result = await loadApiDataInBackground(domain);
+
+  switch (result?.status) {
+    case 'ok':
+      console.log("✅ API data successfully loaded for", domain);
+      buildPartialScopeTextFromApi();
+      break;
+
+    case 'partial':
+      console.warn(`⚠️ Partial API load for ${domain}: ${result.details || ''}`);
+      // Still build partial scope so the user sees whatever we have
+      buildPartialScopeTextFromApi();
+      break;
+
+    case 'cached':
+      console.log("ℹ️ Using cached API data for", domain);
+      buildPartialScopeTextFromApi();
+      break;
+
+    case 'error':
+      console.error(`❌ Failed to load API data for ${domain}: ${result.details || ''}`);
+      break;
+
+    case 'aborted':
+    case 'stale':
+      // Superseded by a newer request; do not update lastProcessedValue
+      console.log("⏹️ Request superseded; ignoring result for", domain);
+      break;
+
+    case 'noop':
+    default:
+      // Nothing to do
+      break;
+  }
+
+  return result?.status || 'noop';
+}
+
+/**
+ * Validate, normalise and (debounced) process a domain.
+ * Keeps re-entrancy safe and only marks domains as processed
+ * when the call wasn't superseded/aborted.
+ */
+async function handleDomainInput(rawInput) {
+  const domain = extractDomain((rawInput || '').trim());
+
+  if (domain && domain === lastProcessedValue) {
+    console.log("⏭ Domain already processed, skipping:", domain);
     return;
   }
 
+  // Queue latest domain if already processing
   if (isProcessing) {
     pendingDomain = domain;
     return;
   }
 
-  isProcessing = true;
-  lastProcessedValue = domain;
-
+  // Validate BEFORE proceeding
   if (!isValidDomainOrUrl(domain)) {
     showDomainValidationError();
-    isProcessing = false;
     return;
   }
-
   hideDomainValidationError();
 
+  // Persist normalised domain so other modules see the same value
+  localStorage.setItem('enteredUrl', domain);
+
+  isProcessing = true;
   try {
-    await loadApiDataInBackground(domain);
-    console.log("✅ API data successfully loaded for", domain);
-    buildPartialScopeTextFromApi();
+    const status = await loadAndProcessApiData(domain);
+
+    // Only mark as processed if it wasn't superseded/aborted/noop
+    if (!['aborted', 'stale', 'noop'].includes(status)) {
+      lastProcessedValue = domain;
+    }
   } catch (err) {
-    console.warn("❌ Failed to load API data:", err);
+    console.warn("❌ Exception during API load:", err);
   } finally {
     isProcessing = false;
 
     // If another domain was queued while this was running, process it now
     if (pendingDomain && pendingDomain !== lastProcessedValue) {
-      const nextDomain = pendingDomain;
+      const next = pendingDomain;
       pendingDomain = null;
-      handleDomainInput(nextDomain);
+      handleDomainInput(next);
+    } else {
+      pendingDomain = null;
     }
   }
 }
 
+// ─────────────────────────────────────────────────────────────
+// URL input listeners (Enter / typing debounce / blur)
+// ─────────────────────────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", () => {
   const websiteInput = document.getElementById("websiteUrl");
   if (!websiteInput) return;
 
-  websiteInput.addEventListener("keydown", function (e) {
+  websiteInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
-      const domain = websiteInput.value.trim();
-      console.log("Enter " + domain);
-      //setUrlEventsMessage("Enter " + domain);
-
+      const domain = extractDomain(websiteInput.value.trim());
+      console.log("⏎ Enter:", domain);
       if (domain !== lastProcessedValue) {
         handleDomainInput(domain);
       }
@@ -119,28 +179,22 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   websiteInput.addEventListener("input", () => {
-    if (!userHasTyped) {
-      userHasTyped = true;
-    }
+    if (!userHasTyped) userHasTyped = true;
 
     clearTimeout(typingTimeout);
     typingTimeout = setTimeout(() => {
-      const domain = websiteInput.value.trim();
-      console.log("⏳ Typing stopped, loading after 300ms... " + domain);
-      //setUrlEventsMessage("⏳ Typing stopped, loading after 300ms... " + domain);
-
-      if (userHasTyped && domain !== lastProcessedValue) {
+      const domain = extractDomain(websiteInput.value.trim());
+      console.log("⏳ Typing stopped (300ms):", domain);
+      if (userHasTyped && domain && domain !== lastProcessedValue) {
         handleDomainInput(domain);
       }
     }, 300);
   });
 
   websiteInput.addEventListener("blur", () => {
-    const domain = websiteInput.value.trim();
-    console.log("🕒 Blur event detected: " + domain);
-    //setUrlEventsMessage("🕒 Blur event detected: " + domain);
-
-    if (domain !== lastProcessedValue) {
+    const domain = extractDomain(websiteInput.value.trim());
+    console.log("🕒 Blur:", domain);
+    if (domain && domain !== lastProcessedValue) {
       handleDomainInput(domain);
     }
   });
@@ -267,38 +321,24 @@ function readJSONFromLocalStorage(key) {
  * This restores cached mobile app details and API details from previous runs.
  */
 function loadDataFromLocalStorage() {
-  if (!window.storedApiData) return;
+  if (!storedApiData) return;
 
-  let mobileDetails = null;
-  let apiDetails = null;
+  const savedDomain = extractDomain((localStorage.getItem('enteredUrl') || '').trim());
+  if (!savedDomain) return;
 
-  for (const key of Object.keys(localStorage)) {
-    if (!key.startsWith('apiData_')) continue;
-    const value = readJSONFromLocalStorage(key);
-    if (!value) continue;
+  const blob = readJSONFromLocalStorage(`apiData_${savedDomain}`);
+  if (!blob) return;
 
-    const lowerKey = key.toLowerCase();
-    if (!mobileDetails && (lowerKey.includes('mobile') || lowerKey.includes('mobiledetails'))) {
-      mobileDetails = value;
-    }
-    if (!apiDetails && (lowerKey.includes('api') || lowerKey.includes('apidetails'))) {
-      apiDetails = value;
-    }
-  }
-
-  if (mobileDetails) storedApiData.mobileDetails = mobileDetails;
-  if (apiDetails) storedApiData.apiDetails = apiDetails;
-
-  // Reset loading flags
+  storedApiData.mobileDetails = blob.mobileDetails || null;
+  storedApiData.apiDetails    = blob.apiDetails || null;
   storedApiData.loading = false;
   storedApiData.isLoading = false;
 
-  if (mobileDetails || apiDetails) {
-    console.log('♻️ Loaded API data from localStorage', {
-      mobileDetails: !!mobileDetails,
-      apiDetails: !!apiDetails
-    });
-  }
+  console.log('♻️ Loaded cached API data', {
+    domain: savedDomain,
+    mobileDetails: !!storedApiData.mobileDetails,
+    apiDetails: !!storedApiData.apiDetails
+  });
 }
 
 /**
@@ -306,20 +346,20 @@ function loadDataFromLocalStorage() {
  * This runs if we have a saved domain and there is no cached data yet.
  */
 function fetchApiDataOnStartup() {
-  if (__didFetchApiDataOnStartup) return;              // guard
+  if (__didFetchApiDataOnStartup) return;
   __didFetchApiDataOnStartup = true;
 
   const raw = (localStorage.getItem('enteredUrl') || '').trim();
   if (!raw) return;
 
-  const domain = extractDomain(raw);  // <- normalise here
+  const domain = extractDomain(raw);
   const needsMobileData = !storedApiData.mobileDetails;
   const needsApiData = !storedApiData.apiDetails;
 
   if ((needsMobileData || needsApiData) && !storedApiData.loading) {
-    loadApiDataInBackground(domain)
-      .then(() => console.log('🔄 Preloaded API data on startup'))
-      .catch(err => console.warn('Preload failed (non-blocking):', err));
+    loadAndProcessApiData(domain)
+      .then((s) => console.log('🔄 Startup API preload status:', s))
+      .catch(err => console.warn('Preload failed (non‑blocking):', err));
   }
 }
 
@@ -367,13 +407,11 @@ function handleLoadApiData() {
     console.log('ℹ️ No URL entered, skipping API data load');
     return;
   }
-
-  const domain = extractDomain(enteredUrl);  // <- normalise here too
-  // Persist the normalised value so Scope/Assets use the same
+  const domain = extractDomain(enteredUrl);
   localStorage.setItem('enteredUrl', domain);
-
-  loadApiDataInBackground(domain);
+  loadAndProcessApiData(domain);
 }
+window.handleLoadApiData = handleLoadApiData;
 
 /**
  * Display the Scope page
