@@ -33,6 +33,23 @@ const storedApiData = {
   apiError: null
 }; 
 
+function escapeHtml(s = '') {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function renderPartialError(title, message) {
+  return `
+    <div class="mb-4 bg-red-50 border-l-4 border-red-500 text-red-700 p-3">
+      <div class="font-semibold">${escapeHtml(title)} error</div>
+      <div class="text-sm mt-1">${escapeHtml(message)}</div>
+    </div>
+  `;
+}
+
 // ─────────────────────────────────────────────────────────────
 // JSON validation helpers (treat 200-with-error as failure)
 // ─────────────────────────────────────────────────────────────
@@ -328,11 +345,24 @@ function showApiResultsPopup() {
   const hasApi    = !!(storedApiData && storedApiData.apiDetails);
   const hasError  = !!(storedApiData && storedApiData.error);
 
-  if (hasMobile || hasApi) {
+  if (hasMobile || hasApi || storedApiData?.mobileError || storedApiData?.apiError) {
     let html = '';
-    if (hasMobile) html += renderDataSection("📱 Mobile Apps", storedApiData.mobileDetails);
-    if (hasApi)    html += renderDataSection("🔗 API Endpoints", storedApiData.apiDetails);
-    contentArea.innerHTML = html;
+
+    if (hasMobile) {
+      html += renderDataSection("📱 Mobile Apps", storedApiData.mobileDetails);
+    } else if (storedApiData?.mobileError) {
+      // per‑section failure banner
+      html += renderPartialError("Mobile Apps", storedApiData.mobileError);
+    }
+
+    if (hasApi) {
+      html += renderDataSection("🔗 API Endpoints", storedApiData.apiDetails);
+    } else if (storedApiData?.apiError) {
+      // per‑section failure banner
+      html += renderPartialError("API Endpoints", storedApiData.apiError);
+    }
+
+    contentArea.innerHTML = html || renderNoDataMessage();
   } else if (hasError) {
     // Show cached error message
     contentArea.innerHTML = renderErrorMessage(storedApiData.error);
