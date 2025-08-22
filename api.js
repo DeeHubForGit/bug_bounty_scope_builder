@@ -635,6 +635,48 @@ async function loadApiDataInBackground(domainArg) {
 }
 
 /**
+ * Public export: check if a domain resolves (backend).
+ * - Returns { resolvable: boolean, raw } when the backend responds.
+ * - Returns { error: true, message, ... } on transport/HTTP/payload errors.
+ * NOTE: `false` is a valid, non-error outcome and must not be treated as an error.
+ */
+export async function checkDomainResolvable(domain, opts = {}) {
+  const body = { domain: normalizeDomain(domain) };
+
+  // Do NOT use a payload-level validator that treats "false" as an error.
+  const res = await makeApiRequest(
+    "is-domain-resolvable",
+    body,
+    { signal: opts.signal, timeoutMs: opts.timeoutMs ?? 8000 }
+  );
+
+  if (res && res.error) {
+    // Transport or HTTP-layer error – let caller decide to fall back
+    return res;
+  }
+
+  // Be liberal in what we accept from the backend
+  let resolvable;
+  if (typeof res === "boolean") {
+    resolvable = res;
+  } else if (typeof res?.resolvable === "boolean") {
+    resolvable = res.resolvable;
+  } else if (typeof res?.ok === "boolean") {
+    resolvable = res.ok;
+  } else if (typeof res?.status === "string") {
+    const s = res.status.toLowerCase();
+    resolvable = (s === "ok" || s === "success" || s === "true");
+  } else if (res && (res.address || (Array.isArray(res.addresses) && res.addresses.length))) {
+    resolvable = true;
+  } else {
+    // Unknown shape – don’t block; let caller fall back
+    return { error: true, message: "Malformed resolver response", raw: res };
+  }
+
+  return { resolvable, raw: res };
+}
+
+/**
  * Public export: fetch mobile app details
  */
 export async function fetchMobileAppDetailsForDomain(

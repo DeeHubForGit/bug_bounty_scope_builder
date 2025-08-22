@@ -1,6 +1,6 @@
 import { initializeSteps, registerDisplayScope } from './navigation.js';
 import { renderRewardTiers } from './rewards.js';
-import { loadApiDataInBackground, storedApiData } from './api.js';
+import { loadApiDataInBackground, storedApiData, checkDomainResolvable } from './api.js';
 import { displayScopePage, buildPartialScopeTextFromApi, showMessageModal } from './scope.js';
 
 // Data is split into three JSON files:
@@ -137,6 +137,25 @@ async function handleDomainInput(rawInput) {
   // Persist normalised domain so other modules see the same value
   localStorage.setItem('enteredUrl', domain);
 
+  // ── Best‑effort DNS resolvability check (non‑blocking for UX) ──
+  try {
+    if (typeof checkDomainResolvable === 'function') {
+      const res = await checkDomainResolvable(domain, { timeoutMs: 5000 });
+      // Clear any previous warning first
+      document.getElementById('urlResolveWarn')?.remove();
+
+      if (!res?.error && res?.resolvable === false) {
+        // Show a soft warning but continue as normal
+        maybeWarnIfUnresolvable(domain, res);
+      }
+      // If it errored (e.g., API not reachable on GitHub Pages), we silently continue.
+    }
+  } catch (e) {
+    // Don’t block on resolver issues
+    console.debug('Resolver check skipped (unreachable or blocked):', e);
+  }
+  // ─────────────────────────────────────────────────────────────
+
   isProcessing = true;
   try {
     const status = await loadAndProcessApiData(domain);
@@ -258,26 +277,43 @@ async function loadAppConfig() {
   }
 }  
 
-const validTlds = new Set([
-  'com', 'net', 'org', 'gov', 'edu', 'info', 'biz',
-  'io', 'co', 'dev', 'app', 'au', 'uk', 'us', 'ca', 'de', 'fr', 'jp', 'cn', 'in', 'nz'
-]);
+function maybeWarnIfUnresolvable(domain, result) {
+  // Reuse/compose a simple warning element; do not “pretty” it up.
+  const inputEl = document.getElementById('websiteUrl');
+  if (!inputEl) return;
 
-function isValidDomainOrUrl(input) {
+  // Remove any previous warning
+  document.getElementById('urlResolveWarn')?.remove();
+
+  const warn = document.createElement('div');
+  warn.id = 'urlResolveWarn';
+  warn.className = 'text-amber-600 mt-1 text-sm';
+  warn.textContent = `Warning: ${domain} did not resolve via DNS. You can continue, but results may be limited.`;
+
+  inputEl.insertAdjacentElement('afterend', warn);
+
+  // Dev breadcrumb only
+  console.warn('⚠️ Domain appears unresolvable (frontend warning only):', { domain, result });
+}
+
+// Replace your TLD-based validator with this policy-driven one
+function isValidDomainOrUrl(input, { allowHttp = false } = {}) {
   try {
-    const url = new URL(input.includes('://') ? input : `https://${input}`);
-    const hostname = url.hostname;
-    const parts = hostname.split('.');
-    if (parts.length < 2) return false;
+    const s = String(input || '').trim();
+    // Accept bare hostnames like "example.com" by prefixing a scheme
+    const url = new URL(s.includes('://') ? s : `https://${s}`);
 
-    const tld = parts[parts.length - 1].toLowerCase();
-    if (!validTlds.has(tld)) return false;
+    // 1) Scheme allowlist
+    const scheme = url.protocol.replace(':','').toLowerCase();
+    if (!(scheme === 'https' || (allowHttp && scheme === 'http'))) return false;
 
-    for (const part of parts) {
-      if (!/^[a-zA-Z0-9-]{1,63}$/.test(part)) return false;
-      if (part.startsWith('-') || part.endsWith('-')) return false;
-    }
+    // 2) Host must exist and be a valid domain/IDN/punycode (URL() enforces syntax)
+    if (!url.hostname) return false;
 
+    // 3) Optional: reject obvious private hosts unless you want them
+    if (/\blocal(host)?$/.test(url.hostname)) return false;
+
+    // No TLD allowlist — TLDs change and PSL exists for registrable checks
     return true;
   } catch {
     return false;
