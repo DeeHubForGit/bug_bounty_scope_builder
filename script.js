@@ -187,35 +187,36 @@ document.addEventListener("DOMContentLoaded", () => {
   const websiteInput = document.getElementById("websiteUrl");
   if (!websiteInput) return;
 
+  // ENTER → validate + process the *raw* value
   websiteInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
-      const domain = extractDomain(websiteInput.value.trim());
-      console.log("⏎ Enter:", domain);
-      if (domain !== lastProcessedValue) {
-        handleDomainInput(domain);
-      }
+      const raw = websiteInput.value; // keep raw for validator
+      if (!raw.trim()) { hideDomainValidationError(); return; }
+      console.log("⏎ Enter:", raw);
+      handleDomainInput(raw); // let handleDomainInput extract/validate
     }
   });
 
+  // TYPING (debounced 500ms) → validate + process
   websiteInput.addEventListener("input", () => {
     if (!userHasTyped) userHasTyped = true;
 
     clearTimeout(typingTimeout);
     typingTimeout = setTimeout(() => {
-      const domain = extractDomain(websiteInput.value.trim());
-      console.log("⏳ Typing stopped (300ms):", domain);
-      if (userHasTyped && domain && domain !== lastProcessedValue) {
-        handleDomainInput(domain);
-      }
-    }, 300);
+      const raw = websiteInput.value; // raw for validator
+      console.log("⏳ Typing stopped (500ms):", raw);
+      if (!raw.trim()) { hideDomainValidationError(); return; }
+      // handleDomainInput itself dedupes via lastProcessedValue
+      handleDomainInput(raw);
+    }, 500);
   });
 
+  // BLUR → validate + process
   websiteInput.addEventListener("blur", () => {
-    const domain = extractDomain(websiteInput.value.trim());
-    console.log("🕒 Blur:", domain);
-    if (domain && domain !== lastProcessedValue) {
-      handleDomainInput(domain);
-    }
+    const raw = websiteInput.value; // raw for validator
+    if (!raw.trim()) { hideDomainValidationError(); return; }
+    console.log("🕒 Blur:", raw);
+    handleDomainInput(raw);
   });
 });
 
@@ -296,47 +297,67 @@ function maybeWarnIfUnresolvable(domain, result) {
   console.warn('⚠️ Domain appears unresolvable (frontend warning only):', { domain, result });
 }
 
-// Replace your TLD-based validator with this policy-driven one
+// Replace your TLD-based validator with this policy-driven one (stricter)
+// - Accepts either a full URL or a bare hostname
+// - Requires at least one dot (e.g. example.com)
+// - Enforces label/TLD rules (letters/digits/hyphen, no leading/trailing hyphen)
+// - Keeps the scheme allowlist behavior and the localhost rejection
 function isValidDomainOrUrl(input, { allowHttp = false } = {}) {
   try {
     const s = String(input || '').trim();
-    // Accept bare hostnames like "example.com" by prefixing a scheme
-    const url = new URL(s.includes('://') ? s : `https://${s}`);
+    if (!s) return false;
 
-    // 1) Scheme allowlist
-    const scheme = url.protocol.replace(':','').toLowerCase();
-    if (!(scheme === 'https' || (allowHttp && scheme === 'http'))) return false;
+    let host = '';
 
-    // 2) Host must exist and be a valid domain/IDN/punycode (URL() enforces syntax)
-    if (!url.hostname) return false;
+    // Accept bare hostnames like "example.com" or a full URL
+    if (/^https?:\/\//i.test(s)) {
+      const url = new URL(s);
+      // 1) Scheme allowlist
+      const scheme = url.protocol.replace(':','').toLowerCase();
+      if (!(scheme === 'https' || (allowHttp && scheme === 'http'))) return false;
+      host = url.hostname;
+    } else {
+      // No scheme: treat as a host; reject obvious path/space
+      if (/\s/.test(s) || s.includes('/')) return false;
+      host = s;
+    }
 
-    // 3) Optional: reject obvious private hosts unless you want them
-    if (/\blocal(host)?$/.test(url.hostname)) return false;
+    // Normalise
+    host = host.toLowerCase().replace(/^www\./, '');
 
-    // No TLD allowlist — TLDs change and PSL exists for registrable checks
+    // 2) Optional: reject obvious private hosts unless you want them
+    if (/\blocal(host)?$/.test(host)) return false;
+
+    // 3) Must not have trailing dot and must contain at least one dot
+    if (host.endsWith('.')) return false;
+    const labels = host.split('.');
+    if (labels.length < 2) return false;
+
+    // 4) TLD sanity: letters only, 2–63 chars
+    const tld = labels[labels.length - 1];
+    if (!/^[a-z]{2,63}$/i.test(tld)) return false;
+
+    // 5) Label rules: 1–63 chars, letters/digits/hyphen, no leading/trailing hyphen
+    const labelRe = /^(?!-)[a-z0-9-]{1,63}(?<!-)$/i;
+    if (!labels.every(l => labelRe.test(l))) return false;
+
     return true;
   } catch {
     return false;
   }
 }
 
-function showDomainValidationError() {
-  let errorEl = document.getElementById('urlError');
-  if (!errorEl) {
-    errorEl = document.createElement('div');
-    errorEl.id = 'urlError';
-    errorEl.className = 'text-red-600 mt-1 text-sm';
-    errorEl.textContent = 'Please enter a valid domain or website URL (e.g. example.com or https://example.com)';
-    const inputEl = document.getElementById('websiteUrl');
-    inputEl.insertAdjacentElement('afterend', errorEl);
-  }
+function showDomainValidationError(msg) {
+  const el = document.getElementById('urlError');
+  if (!el) return;
+  el.textContent = msg || 'Please enter a valid domain or website URL (e.g. example.com or https://example.com)';
+  el.classList.remove('hidden');
 }
 
 function hideDomainValidationError() {
-  const errorEl = document.getElementById('urlError');
-  if (errorEl) {
-    errorEl.remove();
-  }
+  const el = document.getElementById('urlError');
+  if (!el) return;
+  el.classList.add('hidden');
 }
 
 /**
@@ -389,6 +410,15 @@ function fetchApiDataOnStartup() {
   if (!raw) return;
 
   const domain = extractDomain(raw);
+
+  // ✅ Validate before preloading; scrub bad saved values
+  if (!isValidDomainOrUrl(domain)) {
+    localStorage.removeItem('enteredUrl');
+    showDomainValidationError(); // shows the red inline message
+    return;
+  }
+  hideDomainValidationError();
+
   const needsMobileData = !storedApiData.mobileDetails;
   const needsApiData = !storedApiData.apiDetails;
 
@@ -443,7 +473,16 @@ function handleLoadApiData() {
     console.log('ℹ️ No URL entered, skipping API data load');
     return;
   }
+  
   const domain = extractDomain(enteredUrl);
+
+  // ✅ Validate here too
+  if (!isValidDomainOrUrl(domain)) {
+    showDomainValidationError();
+    return;
+  }
+  hideDomainValidationError();
+
   localStorage.setItem('enteredUrl', domain);
   loadAndProcessApiData(domain);
 }

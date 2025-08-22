@@ -1,9 +1,8 @@
 // api.js — Centralized API calls
 // Avoid hard circular import; prefer window.config if available.
-import { config as importedConfig } from './script.js';
 
 function getApiBaseUrl() {
-  const cfg = (typeof window !== 'undefined' && window.config) ? window.config : importedConfig;
+  const cfg = (typeof window !== 'undefined' && window.config) ? window.config : null;
   const base = cfg?.apiBasePath?.replace(/\/$/, '') || '';
   if (!base) console.warn('api.js: apiBasePath is empty — requests will hit relative paths.');
   return base;
@@ -636,44 +635,45 @@ async function loadApiDataInBackground(domainArg) {
 
 /**
  * Public export: check if a domain resolves (backend).
- * - Returns { resolvable: boolean, raw } when the backend responds.
- * - Returns { error: true, message, ... } on transport/HTTP/payload errors.
- * NOTE: `false` is a valid, non-error outcome and must not be treated as an error.
+ * - Normalizes the domain before sending (strips scheme/www/path).
+ * - Accepts both { resolvable: boolean } and { result: { resolvable: boolean } }.
+ * - Returns true/false; returns false on HTTP/transport errors.
+ * NOTE: No stale-guard inside. Callers should compare their own requestId.
  */
-export async function checkDomainResolvable(domain, opts = {}) {
-  const body = { domain: normalizeDomain(domain) };
+async function checkDomainResolvable(domain) {
+  // normalize (api.js already has normalizeDomain)
+  const normalized = normalizeDomain(domain);
+  const url = getApiBaseUrl() + "/is-domain-resolvable";
+  const payload = { domain: normalized };
 
-  // Do NOT use a payload-level validator that treats "false" as an error.
-  const res = await makeApiRequest(
-    "is-domain-resolvable",
-    body,
-    { signal: opts.signal, timeoutMs: opts.timeoutMs ?? 8000 }
-  );
+  console.log("→ Fetching", url, payload);
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    console.log("←", url, "responded", res.status);
+    if (!res.ok) return false;
 
-  if (res && res.error) {
-    // Transport or HTTP-layer error – let caller decide to fall back
-    return res;
+    const data = await res.json();
+
+    // Support both shapes
+    let resolvable = false;
+    if (typeof data?.resolvable === "boolean") {
+      resolvable = data.resolvable;
+    } else if (typeof data?.result?.resolvable === "boolean") {
+      resolvable = data.result.resolvable;
+    }
+
+    if (!resolvable) {
+      console.warn("Domain appears unresolvable (frontend warning only):", { domain: normalized, result: data?.result });
+    }
+    return resolvable;
+  } catch (e) {
+    console.warn("Resolvability check failed:", e?.message || e);
+    return false;
   }
-
-  // Be liberal in what we accept from the backend
-  let resolvable;
-  if (typeof res === "boolean") {
-    resolvable = res;
-  } else if (typeof res?.resolvable === "boolean") {
-    resolvable = res.resolvable;
-  } else if (typeof res?.ok === "boolean") {
-    resolvable = res.ok;
-  } else if (typeof res?.status === "string") {
-    const s = res.status.toLowerCase();
-    resolvable = (s === "ok" || s === "success" || s === "true");
-  } else if (res && (res.address || (Array.isArray(res.addresses) && res.addresses.length))) {
-    resolvable = true;
-  } else {
-    // Unknown shape – don’t block; let caller fall back
-    return { error: true, message: "Malformed resolver response", raw: res };
-  }
-
-  return { resolvable, raw: res };
 }
 
 /**
@@ -711,5 +711,7 @@ export async function fetchApiDetails(domain, opts = {}) {
 export {
   loadApiDataInBackground,
   showApiResultsPopup, 
-  storedApiData
+  storedApiData,
+  checkDomainResolvable,
+  setLoadingStateForInitialStep
 };
