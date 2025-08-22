@@ -58,6 +58,10 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
+document.getElementById('websiteUrl')?.addEventListener('input', () => {
+  document.getElementById('urlResolveWarn')?.remove();
+});
+
 // ─────────────────────────────────────────────────────────────
 // State for URL processing
 // ─────────────────────────────────────────────────────────────
@@ -116,6 +120,13 @@ async function loadAndProcessApiData(domain) {
 async function handleDomainInput(rawInput) {
   const domain = extractDomain((rawInput || '').trim());
 
+  // If empty, clear any messages and stop early
+  if (!domain) {
+    hideDomainValidationError();
+    document.getElementById('urlResolveWarn')?.remove();
+    return;
+  }
+
   if (domain && domain === lastProcessedValue) {
     console.log("⏭ Domain already processed, skipping:", domain);
     return;
@@ -127,9 +138,10 @@ async function handleDomainInput(rawInput) {
     return;
   }
 
-  // Validate BEFORE proceeding
+  // ── FORMAT VALIDATION (no network) ──────────────────────────
   if (!isValidDomainOrUrl(domain)) {
     showDomainValidationError();
+    document.getElementById('urlResolveWarn')?.remove();
     return;
   }
   hideDomainValidationError();
@@ -137,21 +149,25 @@ async function handleDomainInput(rawInput) {
   // Persist normalised domain so other modules see the same value
   localStorage.setItem('enteredUrl', domain);
 
-  // ── Best‑effort DNS resolvability check (non‑blocking for UX) ──
+  // ── DNS RESOLVABILITY GATE (block fetch if not found) ───────
   try {
     if (typeof checkDomainResolvable === 'function') {
-      const res = await checkDomainResolvable(domain, { timeoutMs: 5000 });
-      // Clear any previous warning first
+      // Clear any previous DNS warning first
       document.getElementById('urlResolveWarn')?.remove();
 
-      if (!res?.error && res?.resolvable === false) {
-        // Show a soft warning but continue as normal
-        maybeWarnIfUnresolvable(domain, res);
+      const resolvable = await checkDomainResolvable(domain); // returns boolean
+      if (resolvable === false) {
+        // Friendly message for non‑technical users; reuse existing helper
+        maybeWarnIfUnresolvable(domain, { resolvable: false });
+
+        // ✅ Treat this value as handled so blur/enter don't keep re-checking it
+        lastProcessedValue = domain;
+
+        return; // ⛔️ stop – don’t fetch program data
       }
-      // If it errored (e.g., API not reachable on GitHub Pages), we silently continue.
     }
   } catch (e) {
-    // Don’t block on resolver issues
+    // Don’t block on resolver issues (e.g., API temporarily unreachable)
     console.debug('Resolver check skipped (unreachable or blocked):', e);
   }
   // ─────────────────────────────────────────────────────────────
@@ -402,7 +418,7 @@ function loadDataFromLocalStorage() {
  * Fetch missing API data in the background on startup.
  * This runs if we have a saved domain and there is no cached data yet.
  */
-function fetchApiDataOnStartup() {
+async function fetchApiDataOnStartup() {
   if (__didFetchApiDataOnStartup) return;
   __didFetchApiDataOnStartup = true;
 
@@ -411,18 +427,36 @@ function fetchApiDataOnStartup() {
 
   const domain = extractDomain(raw);
 
-  // ✅ Validate before preloading; scrub bad saved values
+  // 1) Validate saved value; scrub if bad
   if (!isValidDomainOrUrl(domain)) {
     localStorage.removeItem('enteredUrl');
-    showDomainValidationError(); // shows the red inline message
+    hideDomainValidationError();        // nothing to validate yet
+    document.getElementById('urlResolveWarn')?.remove();
     return;
   }
   hideDomainValidationError();
 
-  const needsMobileData = !storedApiData.mobileDetails;
-  const needsApiData = !storedApiData.apiDetails;
+  // 2) DNS gate — do NOT fetch if unresolvable
+  try {
+    if (typeof checkDomainResolvable === 'function') {
+      document.getElementById('urlResolveWarn')?.remove();
+      const resolvable = await checkDomainResolvable(domain);
+      if (resolvable === false) {
+        // show soft warning but skip background fetch
+        maybeWarnIfUnresolvable(domain, { resolvable: false });
+        return;
+      }
+    }
+  } catch (e) {
+    // Resolver unavailable -> silently skip background fetch
+    console.debug('Startup resolver check skipped:', e);
+    return;
+  }
 
-  if ((needsMobileData || needsApiData) && !storedApiData.loading) {
+  // 3) Only preload if we actually need data and nothing is in-flight
+  const needsMobileData = !storedApiData.mobileDetails;
+  const needsApiData    = !storedApiData.apiDetails;
+  if ((needsMobileData || needsApiData) && !storedApiData.loading && !storedApiData.isLoading) {
     loadAndProcessApiData(domain)
       .then((s) => console.log('🔄 Startup API preload status:', s))
       .catch(err => console.warn('Preload failed (non‑blocking):', err));
@@ -473,7 +507,7 @@ function handleLoadApiData() {
     console.log('ℹ️ No URL entered, skipping API data load');
     return;
   }
-  
+
   const domain = extractDomain(enteredUrl);
 
   // ✅ Validate here too
