@@ -19,6 +19,9 @@ let userHasTyped = false;
 
 // Run this once the DOM is fully loaded
 document.addEventListener('DOMContentLoaded', () => {
+  // Make the shared API data store available globally for modules that read window.storedApiData
+  // (e.g., scope.js uses window.storedApiData inside displayScopePage/builders)
+  try { window.storedApiData = storedApiData; } catch (_) {}
   // Load all required app config (settings, scope text, rewards)
   // before setting up the wizard interface
   loadAppConfig()

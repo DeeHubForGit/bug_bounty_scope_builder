@@ -174,10 +174,24 @@ function getScopeTextFromJSON(scopeText) {
     const name = sectionName.toUpperCase();
     const start = `--START ${name}--`;
     const end   = `--END ${name}--`;
-  
+
     // Match the marker block, optionally wrapped in a single <p> ... </p>
+    // Be tolerant of leading/trailing <br> tags inside the paragraph
     const pattern = new RegExp(
-      `(?:<p>)?\\s*${start}[\\s\\S]*?${end}\\s*(?:</p>)?`,
+      // optional opening <p>
+      '(?:<p>)?' +
+      // any whitespace or <br> tags before START
+      '\\s*(?:<br\\s*\\/?>\\s*)*' +
+      // START marker
+      start.replace(/[.*+?^${}()|[\\]\\]/g, r => r) +
+      // content up to END
+      '[\\s\\S]*?' +
+      // END marker
+      end.replace(/[.*+?^${}()|[\\]\\]/g, r => r) +
+      // optional whitespace or <br> after END
+      '\\s*(?:<br\\s*\\/?>\\s*)*' +
+      // optional closing </p>
+      '(?:</p>)?',
       'i'
     );
   
@@ -190,58 +204,74 @@ function getScopeTextFromJSON(scopeText) {
   }
   
 /**
- * Build partial scope text using API result (Assets injected only).
- * Saves result in memory and localStorage but does not render it.
+ * Build or update the partial scope text for the Scope step.
+ * - For new/reset: Use template from JSON and insert assets.
+ * - For edit mode: Reuse existing scope text and patch only the assets section.
  */
 function buildPartialScopeTextFromApi() {
-    const storedApiData = window.storedApiData || {};
-    
-    // 1) Try API result first
-    let scopeText = storedApiData.scopeText;
-  
-    // 2) Fallback to JSON-loaded default (window.scopeText)
-    if (!Array.isArray(scopeText) || scopeText.length === 0) {
-      console.warn('⚠️ No valid scopeText from API — using window.scopeText');
-      scopeText = window.scopeText;
-    }
-    
-    // 3) Final check
-    if (!Array.isArray(scopeText)) {
-      console.error('❌ scopeText is still invalid — aborting');
-      return;
-    }
-  
-    // 4) Convert to HTML
-    const templateHTML = getScopeTextFromJSON(scopeText);
-  
-    // 5) Inject assets
-    const assetsBlock = buildAssetsBlockForScope(storedApiData);
-    const partialScopeHTML = replaceBlockByMarker(templateHTML, 'IN-SCOPE', assetsBlock);
-  
-    // 6) Save
-    storedApiData.partialScopeHTML = partialScopeHTML;
-    localStorage.setItem('partialScopeHTML', partialScopeHTML);
-  
-    console.log('✅ Partial scope text saved in memory and localStorage (not rendered yet)');
-  }  
-  
-  function loadPartialScopeFromStorage(storedApiData) {
-    const saved = localStorage.getItem('partialScopeHTML');
-    if (saved) {
-      storedApiData.partialScopeHTML = saved;
-      console.log('✅ Loaded partial scope from localStorage');
-    }
+  const storedApiData = window.storedApiData || {};
+  const currentDomain = (document.getElementById('websiteUrl')?.value || '').trim().toLowerCase();
+
+  // Use JSON-loaded default (window.scopeText) exclusively
+  let scopeText = window.scopeText;
+
+  // Validate
+  if (!Array.isArray(scopeText) || scopeText.length === 0) {
+    console.error('❌ window.scopeText is not loaded or empty — aborting');
+    return;
   }
 
-  // Persist final scope HTML helper
-  function setFinalScopeHTML(html) {
-    if (!html) return;
-    localStorage.setItem('finalScopeHTML', html);
-    if (window.storedApiData) {
-      window.storedApiData.finalScopeHTML = html;
+  // Build assets block
+  const assetsBlock = buildAssetsBlockForScope(storedApiData);
+  let finalHTML;
+
+  // Check existing scope (edit mode)
+  const existing = localStorage.getItem('partialScopeHTML');
+  const initialDomain = localStorage.getItem('initialDomain');
+
+  if (existing && existing.includes('--START IN-SCOPE--')) {
+    const isUrlChanged = initialDomain && initialDomain !== currentDomain;
+
+    if (isUrlChanged) {
+      console.log('🔄 URL changed — updating assets block in existing scope');
+      finalHTML = replaceBlockByMarker(existing, 'IN-SCOPE', assetsBlock);
+    } else {
+      console.log('✅ Existing scope retained (no URL change)');
+      finalHTML = existing;
     }
+  } else {
+    console.log('🆕 Creating new scope from JSON template');
+    const templateHTML = getScopeTextFromJSON(scopeText);
+    finalHTML = replaceBlockByMarker(templateHTML, 'IN-SCOPE', assetsBlock);
   }
-  
+
+  // Save updated version
+  storedApiData.partialScopeHTML = finalHTML;
+  localStorage.setItem('partialScopeHTML', finalHTML);
+
+  // Save current domain only AFTER logic completes
+  localStorage.setItem('initialDomain', currentDomain);
+
+  console.log('💾 Partial scope text saved in memory and localStorage (not rendered yet)');
+}
+
+function loadPartialScopeFromStorage(storedApiData) {
+  const saved = localStorage.getItem('partialScopeHTML');
+  if (saved) {
+    storedApiData.partialScopeHTML = saved;
+    console.log('✅ Loaded partial scope from localStorage');
+  }
+}
+
+// Persist final scope HTML helper
+function setFinalScopeHTML(html) {
+  if (!html) return;
+  localStorage.setItem('finalScopeHTML', html);
+  if (window.storedApiData) {
+    window.storedApiData.finalScopeHTML = html;
+  }
+}
+
   /**
    * Return the final Scope HTML by combining:
    * - the saved partial scope (scope + assets) from memory/localStorage
@@ -255,33 +285,28 @@ function buildPartialScopeTextFromApi() {
       loadPartialScopeFromStorage(storedApiData);
     }
   
-    // 2) Establish a base HTML that already includes IN‑SCOPE (assets)
-    let baseWithAssets = (storedApiData && storedApiData.partialScopeHTML) || '';
+    let baseWithAssets = storedApiData.partialScopeHTML || '';
   
-    // If not available yet, try building it now from what we have
+    // 2) If partialScopeHTML is missing or asset data is outdated, rebuild assets
+    const newAssetsBlock = buildAssetsBlockForScope(storedApiData);
+  
     if (!baseWithAssets) {
-      // Try to build from API-provided scope text (array of template lines)
-      const rawScopeText = storedApiData?.scopeText;
-      if (rawScopeText && Array.isArray(rawScopeText) && rawScopeText.length > 0) {
-        const templateHTML = rawScopeText.join('\n').trim();
-        const assetsBlock  = buildAssetsBlockForScope(storedApiData);
-        baseWithAssets     = replaceBlockByMarker(templateHTML, 'IN-SCOPE', assetsBlock);
-      } else {
-        // Final fallback: use local JSON template helper
-        const templateHTML = getScopeTextFromJSON(scopeText);
-        const assetsBlock  = buildAssetsBlockForScope(storedApiData);
-        baseWithAssets     = replaceBlockByMarker(templateHTML, 'IN-SCOPE', assetsBlock);
-      }
+      // Build from JSON template only
+      const templateHTML = getScopeTextFromJSON(scopeText);
+      baseWithAssets = replaceBlockByMarker(templateHTML, 'IN-SCOPE', newAssetsBlock);
+    } else {
+      // Replace only the assets block (preserving edits to rewards if any)
+      baseWithAssets = replaceBlockByMarker(baseWithAssets, 'IN-SCOPE', newAssetsBlock);
     }
-
-    // 3) Build rewards block using your existing helper (expects global `rewards`)
+  
+    // 3) Build rewards block using your existing helper
     const rewardsBlock = getRewardsTextForScope(rewards);
   
-    // 4) Inject rewards into the template
+    // 4) Inject rewards into the updated template
     const finalHTML = replaceBlockByMarker(baseWithAssets, 'REWARDS', rewardsBlock).trim();
   
     return finalHTML;
-  }
+  }  
   
 /**
  * Display the final Scope (scope + assets + rewards) in the Trix editor.
@@ -308,33 +333,42 @@ function displayScopePage(rewards, scopeText) {
   localStorage.setItem('initialRewardTier', selectedTier);
   ensureCopyButtonOnce();
 
-  let existing = finalInput.value?.trim() || localStorage.getItem('finalScopeHTML');
+  // 1️⃣ Load existing scope (assets already injected)
+  let existing = storedApiData.partialScopeHTML || localStorage.getItem('partialScopeHTML');
 
-  if (existing && hasChangedTier) {
-    console.log('♻️ Reward tier changed — replacing only the rewards section.');
-    const newRewards = getRewardsTextForScope(rewards); // assumes it returns wrapped HTML
-
-    // Replace the section between --START REWARDS-- and --END REWARDS--
-    existing = existing.replace(
-      /--START REWARDS--[\s\S]*?--END REWARDS--/,
-      newRewards
-    );
-  }
-
-  if (existing) {
-    console.log('🔁 Displaying scope (existing text with any updates).');
-    finalInput.value = existing;
-    finalInput.dispatchEvent(new Event('input', { bubbles: true }));
-    finalEditor.editor.loadHTML(existing);
-    setFinalScopeHTML(existing); // keep storage in sync
-  } else {
-    console.log('🆕 Generating new scope (no saved version).');
+  if (!existing) {
+    console.warn('⚠️ No partialScopeHTML found — fallback to generating full scope.');
     const scopeHTML = getFinalScopeHTML(storedApiData, rewards, scopeText);
     finalInput.value = scopeHTML;
     finalInput.dispatchEvent(new Event('input', { bubbles: true }));
     finalEditor.editor.loadHTML(scopeHTML);
-    setFinalScopeHTML(scopeHTML); // save initial render
+    setFinalScopeHTML(scopeHTML);
+    return;
   }
+
+  // 2️⃣ Insert rewards if not present
+  if (!existing.includes('--START REWARDS--')) {
+    console.log('➕ Inserting rewards block into scope.');
+    const rewardsBlock = getRewardsTextForScope(rewards);
+    existing += '\n' + rewardsBlock;
+  }
+
+  // 3️⃣ Replace rewards if tier changed
+  else if (hasChangedTier) {
+    console.log('♻️ Reward tier changed — replacing only the rewards section.');
+    const rewardsBlock = getRewardsTextForScope(rewards);
+    existing = existing.replace(
+      /--START REWARDS--[\s\S]*?--END REWARDS--/,
+      rewardsBlock
+    );
+  }
+
+  // 4️⃣ Display final scope
+  console.log('🖋️ Rendering scope in final editor.');
+  finalInput.value = existing;
+  finalInput.dispatchEvent(new Event('input', { bubbles: true }));
+  finalEditor.editor.loadHTML(existing);
+  setFinalScopeHTML(existing);
 }
   
   /**
