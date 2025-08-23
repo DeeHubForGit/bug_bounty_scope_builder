@@ -326,14 +326,12 @@ function displayScopePage(rewards, scopeText) {
     return;
   }
 
+  // Keep tier tracking if used elsewhere, but we will always refresh rewards below
   const selectedTier = localStorage.getItem('selectedRewardTier');
-  const initialTier = localStorage.getItem('initialRewardTier');
-  const hasChangedTier = selectedTier !== initialTier;
-
   localStorage.setItem('initialRewardTier', selectedTier);
   ensureCopyButtonOnce();
 
-  // 1️⃣ Load existing scope (assets already injected)
+  // 1) Load existing scope (assets already injected)
   let existing = storedApiData.partialScopeHTML || localStorage.getItem('partialScopeHTML');
 
   if (!existing) {
@@ -346,24 +344,17 @@ function displayScopePage(rewards, scopeText) {
     return;
   }
 
-  // 2️⃣ Insert rewards if not present
-  if (!existing.includes('--START REWARDS--')) {
-    console.log('➕ Inserting rewards block into scope.');
-    const rewardsBlock = getRewardsTextForScope(rewards);
+  // 2) Always inject or replace rewards with the latest block
+  const rewardsBlock = getRewardsTextForScope(rewards);
+  if (existing.includes('--START REWARDS--')) {
+    console.log('♻️ Refreshing rewards section.');
+    existing = existing.replace(/--START REWARDS--[\s\S]*?--END REWARDS--/i, rewardsBlock);
+  } else {
+    console.log('➕ Adding rewards section.');
     existing += '\n' + rewardsBlock;
   }
 
-  // 3️⃣ Replace rewards if tier changed
-  else if (hasChangedTier) {
-    console.log('♻️ Reward tier changed — replacing only the rewards section.');
-    const rewardsBlock = getRewardsTextForScope(rewards);
-    existing = existing.replace(
-      /--START REWARDS--[\s\S]*?--END REWARDS--/,
-      rewardsBlock
-    );
-  }
-
-  // 4️⃣ Display final scope
+  // 3) Display final scope
   console.log('🖋️ Rendering scope in final editor.');
   finalInput.value = existing;
   finalInput.dispatchEvent(new Event('input', { bubbles: true }));
