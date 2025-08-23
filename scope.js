@@ -42,6 +42,7 @@ function getScopeTextFromJSON(scopeText) {
     
     // Array to collect all mobile app entries
     const appEntries = [];
+    const suggestedOnly = !!(window.config && window.config.suggestedAppsOnly);
     
     // Process main app - use suggested app(s) if available
     if (Array.isArray(mobileDetails.suggested_apps) && mobileDetails.suggested_apps.length > 0) {
@@ -80,8 +81,8 @@ function getScopeTextFromJSON(scopeText) {
       }
     }
     
-    // Process alternative apps
-    if (mobileDetails.alternatives) {
+    // Process alternative apps (only when not limited to suggested apps)
+    if (!suggestedOnly && mobileDetails.alternatives) {
       // Process iOS alternatives
       if (Array.isArray(mobileDetails.alternatives.iOS)) {
         mobileDetails.alternatives.iOS.forEach(app => {

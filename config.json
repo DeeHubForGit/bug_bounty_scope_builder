@@ -1,5 +1,6 @@
 {
     "showResetButton": true,
     "showApiDataButton": true,
-    "apiBasePath": "http://localhost:5000"
+    "apiBasePath": "http://127.0.0.1:5000",
+    "suggestedAppsOnly": true
 }
