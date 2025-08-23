@@ -435,7 +435,8 @@ function formatProgramDataContent(data) {
   }
 
   if (typeof data === 'object') {
-    return `<pre class="bg-gray-50 p-2 rounded border text-sm">${JSON.stringify(data, null, 2)}</pre>`;
+    // Allow long lines/URLs to wrap instead of being visually cut off
+    return `<pre class="bg-gray-50 p-2 rounded border text-sm" style="white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; overflow: auto;">${JSON.stringify(data, null, 2)}</pre>`;
   }
 
   return `<p>${data}</p>`;
