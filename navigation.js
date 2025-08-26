@@ -34,6 +34,13 @@ function initializeSteps() {
   if (urlInput) urlInput.addEventListener('input', syncGenerateButtonState);
   syncGenerateButtonState(); // initial paint
 
+  // Keep Generate in sync with API loading/data lifecycle
+  try {
+    window.addEventListener('api-loading-started', syncGenerateButtonState);
+    window.addEventListener('api-loading-finished', syncGenerateButtonState);
+    window.addEventListener('api-data-updated', syncGenerateButtonState);
+  } catch {}
+
   // Restore saved step if valid; else show Builder
   const saved = localStorage.getItem('currentStepIndex');
   const savedIdx = Number.parseInt(saved, 10);
@@ -57,16 +64,22 @@ function syncGenerateButtonState() {
   if (!genBtn) return;
 
   const hasUrl = !!(urlInput && urlInput.value.trim());
-  genBtn.disabled = !hasUrl;
-  genBtn.setAttribute('aria-disabled', String(!hasUrl));
-  genBtn.tabIndex = hasUrl ? 0 : -1; // Remove from tab flow when disabled
+  const hasData = !!(window.storedApiData && (window.storedApiData.mobileDetails || window.storedApiData.apiDetails));
+  const isLoading = !!(window.storedApiData && (window.storedApiData.loading || window.storedApiData.isLoading));
+
+  // Policy: enable only when URL present AND data available. Keep disabled while loading or when no data yet.
+  const enable = hasUrl && hasData && !isLoading;
+
+  genBtn.disabled = !enable;
+  genBtn.setAttribute('aria-disabled', String(!enable));
+  genBtn.tabIndex = enable ? 0 : -1; // Remove from tab flow when disabled
 
   // Visual state
-  genBtn.classList.toggle('opacity-50', !hasUrl);
-  genBtn.classList.toggle('cursor-not-allowed', !hasUrl);
-  genBtn.classList.toggle('bg-blue-600', hasUrl);
-  genBtn.classList.toggle('hover:bg-blue-700', hasUrl);
-  genBtn.classList.toggle('bg-blue-400', !hasUrl);
+  genBtn.classList.toggle('opacity-50', !enable);
+  genBtn.classList.toggle('cursor-not-allowed', !enable);
+  genBtn.classList.toggle('bg-blue-600', enable);
+  genBtn.classList.toggle('hover:bg-blue-700', enable);
+  genBtn.classList.toggle('bg-blue-400', !enable);
 }
 
 // Show/hide Data button (config + only on Builder step)

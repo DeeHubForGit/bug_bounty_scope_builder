@@ -35,24 +35,11 @@ document.addEventListener('DOMContentLoaded', () => {
       // C) Initialise UI
       registerDisplayScope(displayScope);
       renderRewardTiers(rewards);
-      initializeSteps();
+      // Restore URL first so initial sync in initializeSteps sees it
       setupUrlPersistence();
+      initializeSteps();
 
-      // D) Setup "Generate Program" button (footer button)
-      const genBtn = document.getElementById('generateProgramButton');
-      const urlInput = document.getElementById('websiteUrl');
-
-      if (genBtn && urlInput) {
-        // Set initial state based on existing value (from localStorage restore)
-        genBtn.disabled = !urlInput.value.trim();
-
-        // Update state as user types
-        urlInput.addEventListener('input', () => {
-          genBtn.disabled = !urlInput.value.trim();
-        });
-      }
-
-      // E) Set up autosave so scope is saved when the form is closed
+      // D) Set up autosave so scope is saved when the form is closed
       setupScopeAutosave();
     })
     .catch(error => {

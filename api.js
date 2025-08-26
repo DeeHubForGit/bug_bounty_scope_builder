@@ -198,11 +198,14 @@ async function makeApiRequest(endpoint, body, opts = {}) {
 }
 
 // Show the loading indicator near the nav buttons
-function showGlobalLoadingMessage() {
+function showGlobalLoadingMessage(domainArg) {
   const el = document.getElementById('dataLoadingStatus');
   if (!el) return;
+  const domain = normalizeDomain(
+    domainArg || (localStorage.getItem('enteredUrl') || localStorage.getItem('autoModeDomain') || 'this site')
+  );
   el.classList.remove('hidden');
-  el.innerHTML = `<span class="inline-block animate-spin mr-1">↻</span> Loading…`;
+  el.innerHTML = `<span class="inline-block animate-spin mr-1">↻</span> Attempting to retrieve mobiles and API's for <span class="font-mono">${escapeHtml(domain)}</span>`;
 }
 
 // Hide the loading indicator
@@ -291,7 +294,7 @@ function setLoadingStateForInitialStep(isLoading) {
   const viewData = document.getElementById('viewDataButton');
   const generateProgramButton = document.getElementById('generateProgramButton');
 
-  const buttons = [reset, viewData, generateProgramButton];
+  const buttons = [reset, viewData];
 
   buttons.forEach(btn => {
     if (!btn) return;
@@ -497,12 +500,14 @@ async function loadApiDataInBackground(domainArg) {
   storedApiData.apiError = null;
 
   // Show loading indicators
-  showGlobalLoadingMessage();
+  showGlobalLoadingMessage(domain);
+  try { window.dispatchEvent(new CustomEvent('api-loading-started')); } catch {}
 
   const finishIfCurrent = () => {
     if (mySeq === window.__apiLoadState.seq) {
       hideGlobalLoadingMessage();
       setLoadingStateForInitialStep(false);
+      try { window.dispatchEvent(new CustomEvent('api-loading-finished')); } catch {}
     }
   };
 
@@ -525,6 +530,7 @@ async function loadApiDataInBackground(domainArg) {
         storedApiData.apiError = null;
 
         finishIfCurrent();
+        try { window.dispatchEvent(new CustomEvent('api-data-updated')); } catch {}
         console.log("✅ Loaded cached API data for", domain);
         return { status: 'cached' };
       } catch { /* continue to fetch */ }
@@ -576,6 +582,7 @@ async function loadApiDataInBackground(domainArg) {
         timestamp: Date.now()
       };
       finishIfCurrent();
+      try { window.dispatchEvent(new CustomEvent('api-data-updated')); } catch {}
       showDataRetryButton({ domain, errorMsg: storedApiData.error.details });
       console.warn("❌ API background load failed:", storedApiData.error.details);
       return { status: 'error', details: storedApiData.error.details };
@@ -629,6 +636,7 @@ async function loadApiDataInBackground(domainArg) {
     };
 
     finishIfCurrent();
+    try { window.dispatchEvent(new CustomEvent('api-data-updated')); } catch {}
     showDataRetryButton({ domain, errorMsg: `${storedApiData.error.message} — ${storedApiData.error.details}` });
     return { status: 'error', details: storedApiData.error.message };
   }
