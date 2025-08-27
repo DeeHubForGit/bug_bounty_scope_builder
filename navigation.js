@@ -64,11 +64,11 @@ function syncGenerateButtonState() {
   if (!genBtn) return;
 
   const hasUrl = !!(urlInput && urlInput.value.trim());
-  const hasData = !!(window.storedApiData && (window.storedApiData.mobileDetails || window.storedApiData.apiDetails));
   const isLoading = !!(window.storedApiData && (window.storedApiData.loading || window.storedApiData.isLoading));
 
-  // Policy: enable only when URL present AND data available. Keep disabled while loading or when no data yet.
-  const enable = hasUrl && hasData && !isLoading;
+  // Policy: enable when URL is present and we are NOT currently loading.
+  // We do NOT require API data to enable scope creation.
+  const enable = hasUrl && !isLoading;
 
   genBtn.disabled = !enable;
   genBtn.setAttribute('aria-disabled', String(!enable));

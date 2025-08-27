@@ -110,6 +110,15 @@ async function loadAndProcessApiData(domain) {
 async function handleDomainInput(rawInput) {
   const domain = extractDomain((rawInput || '').trim());
 
+  // If the user actually changed the URL, unpin persistent message.
+  // Do not clear the element here; the loader/error will update it.
+  if (domain && domain !== lastProcessedValue) {
+    try {
+      if (!window.__apiLoadState) window.__apiLoadState = {};
+      window.__apiLoadState.pinned = false;
+    } catch {}
+  }
+
   // If empty, clear any messages and stop early
   if (!domain) {
     hideDomainValidationError();
@@ -142,28 +151,36 @@ async function handleDomainInput(rawInput) {
   // Persist normalised domain so other modules see the same value
   localStorage.setItem('enteredUrl', domain);
 
-  // ── DNS RESOLVABILITY GATE (block fetch if not found) ───────
+  // ── DNS RESOLVABILITY CHECK (gate fetching) ─────────────────
+  let allowFetch = true; // default allow
   try {
     if (typeof checkDomainResolvable === 'function') {
       // Clear any previous DNS warning first
       document.getElementById('urlResolveWarn')?.remove();
 
-      const resolvable = await checkDomainResolvable(domain); // returns boolean
+      const resolvable = await checkDomainResolvable(domain); // true | false | null (unknown)
       if (resolvable === false) {
-        // Friendly message for non‑technical users; reuse existing helper
+        // Confirmed unresolvable -> show warning and BLOCK fetching
         maybeWarnIfUnresolvable(domain, { resolvable: false });
-
-        // ✅ Treat this value as handled so blur/enter don't keep re-checking it
-        lastProcessedValue = domain;
-
-        return; // ⛔️ stop – don’t fetch program data
+        allowFetch = false;
+      } else if (resolvable === true) {
+        allowFetch = true;
+      } else {
+        // null/unknown -> allow fetch (bypass only because resolver couldn't confirm)
+        allowFetch = true;
       }
     }
   } catch (e) {
-    // Don’t block on resolver issues (e.g., API temporarily unreachable)
-    console.debug('Resolver check skipped (unreachable or blocked):', e);
+    // Resolver error -> allow fetch (bypass is allowed only when there is an error)
+    console.debug('Resolver check errored; allowing fetch:', e);
+    allowFetch = true;
   }
   // ─────────────────────────────────────────────────────────────
+
+  if (!allowFetch) {
+    console.log('🚫 Skipping data retrieval due to DNS not resolving.');
+    return;
+  }
 
   isProcessing = true;
   try {
@@ -449,22 +466,27 @@ async function fetchApiDataOnStartup() {
   }
   hideDomainValidationError();
 
-  // 2) DNS gate — do NOT fetch if unresolvable
+  // 2) DNS check — BLOCK fetch if confirmed unresolvable; allow on error
+  let allowFetch = true;
   try {
     if (typeof checkDomainResolvable === 'function') {
       document.getElementById('urlResolveWarn')?.remove();
       const resolvable = await checkDomainResolvable(domain);
       if (resolvable === false) {
-        // show soft warning but skip background fetch
         maybeWarnIfUnresolvable(domain, { resolvable: false });
-        return;
+        allowFetch = false;
+      } else if (resolvable === true) {
+        allowFetch = true;
+      } else {
+        // unknown -> allow
+        allowFetch = true;
       }
     }
   } catch (e) {
-    // Resolver unavailable -> silently skip background fetch
-    console.debug('Startup resolver check skipped:', e);
-    return;
+    console.debug('Startup resolver error; allowing fetch:', e);
+    allowFetch = true;
   }
+  if (!allowFetch) return; // do not preload if DNS doesn't resolve
 
   // 3) Only preload if we actually need data and nothing is in-flight
   const needsMobileData = !storedApiData.mobileDetails;
@@ -531,7 +553,33 @@ function handleLoadApiData() {
   hideDomainValidationError();
 
   localStorage.setItem('enteredUrl', domain);
-  loadAndProcessApiData(domain);
+
+  // DNS gate here too for manual Retry
+  (async () => {
+    let allowFetch = true;
+    try {
+      if (typeof checkDomainResolvable === 'function') {
+        document.getElementById('urlResolveWarn')?.remove();
+        const resolvable = await checkDomainResolvable(domain);
+        if (resolvable === false) {
+          maybeWarnIfUnresolvable(domain, { resolvable: false });
+          allowFetch = false;
+        } else if (resolvable === true) {
+          allowFetch = true;
+        } else {
+          allowFetch = true; // unknown -> allow
+        }
+      }
+    } catch (e) {
+      console.debug('Resolver error during manual load; allowing fetch:', e);
+      allowFetch = true;
+    }
+    if (allowFetch) {
+      loadAndProcessApiData(domain);
+    } else {
+      console.log('🚫 Manual load blocked due to DNS not resolving.');
+    }
+  })();
 }
 window.handleLoadApiData = handleLoadApiData;
 
@@ -686,6 +734,9 @@ function performReset() {
     document.getElementById('urlError')?.remove();
   }
 
+  // Remove DNS resolution warning, if any
+  document.getElementById('urlResolveWarn')?.remove();
+
   // Disable buttons explicitly
   const generateBtn = document.getElementById('generateProgramButton');
   if (generateBtn) generateBtn.disabled = true;
@@ -699,6 +750,12 @@ function performReset() {
     loadingEl.classList.add('hidden');
     loadingEl.innerHTML = '';
   }
+
+  // Ensure any persistent pin is cleared so loaders/errors don't stick after reset
+  try {
+    if (!window.__apiLoadState) window.__apiLoadState = {};
+    window.__apiLoadState.pinned = false;
+  } catch {}
 
   // Close Program Data modal if open
   const dataModal = document.getElementById('programDataModal');

@@ -201,6 +201,18 @@ async function makeApiRequest(endpoint, body, opts = {}) {
 function showGlobalLoadingMessage(domainArg) {
   const el = document.getElementById('dataLoadingStatus');
   if (!el) return;
+
+  // Cancel any pending hide of this element (from hideGlobalLoadingMessage)
+  try {
+    if (window.__apiLoadState?.hideT) {
+      clearTimeout(window.__apiLoadState.hideT);
+      window.__apiLoadState.hideT = null;
+    }
+    // Loading spinner should not be pinned
+    if (!window.__apiLoadState) window.__apiLoadState = {};
+    window.__apiLoadState.pinned = false;
+  } catch {}
+
   const domain = normalizeDomain(
     domainArg || (localStorage.getItem('enteredUrl') || localStorage.getItem('autoModeDomain') || 'this site')
   );
@@ -214,9 +226,19 @@ function hideGlobalLoadingMessage() {
   if (!el) return;
 
   // Add a small delay to ensure visibility
-  setTimeout(() => {
+  try { if (!window.__apiLoadState) window.__apiLoadState = {}; } catch {}
+  // If UI is pinned (showing persistent error/retry), do not hide
+  if (window.__apiLoadState?.pinned) {
+    return;
+  }
+  if (window.__apiLoadState?.hideT) {
+    try { clearTimeout(window.__apiLoadState.hideT); } catch {}
+    window.__apiLoadState.hideT = null;
+  }
+  window.__apiLoadState.hideT = setTimeout(() => {
     el.classList.add('hidden');
     el.innerHTML = '';
+    try { window.__apiLoadState.hideT = null; } catch {}
   }, 300); // Delay in milliseconds
   
 }
@@ -235,8 +257,19 @@ function showDataRetryButton(domainOrOptions, maybeErrorMsg, maybeRetryFnName) {
     retryFnName = maybeRetryFnName || 'handleLoadApiData';
   }
 
+  // Cancel any pending hide of this element (from hideGlobalLoadingMessage)
+  try {
+    if (window.__apiLoadState?.hideT) {
+      clearTimeout(window.__apiLoadState.hideT);
+      window.__apiLoadState.hideT = null;
+    }
+    // Pin the UI so hiders will not clear it until URL changes
+    if (!window.__apiLoadState) window.__apiLoadState = {};
+    window.__apiLoadState.pinned = true;
+  } catch {}
+
   // fallbacks
-  if (!domain) domain = (localStorage.getItem('enteredUrl') || localStorage.getItem('autoModeDomain') || '').trim() || 'this site';
+  if (!domain) domain = (localStorage.getItem('enteredUrl') || '').trim() || 'this site';
   if (!errorMsg && storedApiData?.error) {
     errorMsg = `${storedApiData.error.message || 'Unknown error'}${storedApiData.error.details ? ' — ' + storedApiData.error.details : ''}`;
   }
@@ -580,15 +613,21 @@ async function loadApiDataInBackground(domainArg) {
         message: `Error occurred retrieving mobile apps and API for ${domain}.`,
         details: `Mobile: ${mobileReason}  API: ${apiReason}`,
         timestamp: Date.now()
-      };
-      finishIfCurrent();
+      }
       try { window.dispatchEvent(new CustomEvent('api-data-updated')); } catch {}
+      const hideTimeoutId = window.__apiLoadState.hideTimeoutId;
+      if (hideTimeoutId) {
+        window.clearTimeout(hideTimeoutId);
+        window.__apiLoadState.hideTimeoutId = null;
+      }
       showDataRetryButton({ domain, errorMsg: storedApiData.error.details });
+      finishIfCurrent();
       console.warn("❌ API background load failed:", storedApiData.error.details);
       return { status: 'error', details: storedApiData.error.details };
     }
 
     // Partial or full success
+    // Persist per-section results
     storedApiData.mobileDetails = mobileError ? null : mobileVal;
     storedApiData.apiDetails    = apiError ? null : apiVal;
     storedApiData.mobileError   = mobileReason;
@@ -619,6 +658,7 @@ async function loadApiDataInBackground(domainArg) {
       const msg = parts.join('  ');
       console.warn(`⚠️ API data partially loaded for ${domain} — ${msg}`);
       showDataRetryButton({ domain, errorMsg: msg });
+      finishIfCurrent();
       return { status: 'partial', details: msg };
     }
 
@@ -635,9 +675,9 @@ async function loadApiDataInBackground(domainArg) {
       timestamp: Date.now()
     };
 
-    finishIfCurrent();
     try { window.dispatchEvent(new CustomEvent('api-data-updated')); } catch {}
     showDataRetryButton({ domain, errorMsg: `${storedApiData.error.message} — ${storedApiData.error.details}` });
+    finishIfCurrent();
     return { status: 'error', details: storedApiData.error.message };
   }
 }
@@ -663,7 +703,7 @@ async function checkDomainResolvable(domain) {
       body: JSON.stringify(payload)
     });
     console.log("←", url, "responded", res.status);
-    if (!res.ok) return false;
+    if (!res.ok) return null; // transport-level failure -> unknown
 
     const data = await res.json();
 
@@ -681,7 +721,7 @@ async function checkDomainResolvable(domain) {
     return resolvable;
   } catch (e) {
     console.warn("Resolvability check failed:", e?.message || e);
-    return false;
+    return null; // unknown — let caller proceed and fetch
   }
 }
 
