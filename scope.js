@@ -227,7 +227,10 @@ function buildPartialScopeTextFromApi() {
   let finalHTML;
 
   // Check existing scope (edit mode)
-  const existing = localStorage.getItem('partialScopeHTML');
+  // Prefer user's edited final HTML if present; fall back to partial
+  const existingFinal   = localStorage.getItem('finalScopeHTML');
+  const existingPartial = localStorage.getItem('partialScopeHTML');
+  const existing = existingFinal || existingPartial;
   const initialDomain = localStorage.getItem('initialDomain');
 
   if (existing && existing.includes('--START IN-SCOPE--')) {
@@ -249,6 +252,8 @@ function buildPartialScopeTextFromApi() {
   // Save updated version
   storedApiData.partialScopeHTML = finalHTML;
   localStorage.setItem('partialScopeHTML', finalHTML);
+  // If user had a final version, keep it in sync with updated assets as well
+  try { if (existingFinal) setFinalScopeHTML(finalHTML); } catch {}
 
   // Save current domain only AFTER logic completes
   localStorage.setItem('initialDomain', currentDomain);
@@ -333,7 +338,10 @@ function displayScopePage(rewards, scopeText) {
   ensureCopyButtonOnce();
 
   // 1) Load existing scope (assets already injected)
-  let existing = storedApiData.partialScopeHTML || localStorage.getItem('partialScopeHTML');
+  // Prefer user's edited final HTML, with fallback to partial
+  let existing = localStorage.getItem('finalScopeHTML')
+             || storedApiData.partialScopeHTML
+             || localStorage.getItem('partialScopeHTML');
 
   if (!existing) {
     console.warn('⚠️ No partialScopeHTML found — fallback to generating full scope.');
