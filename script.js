@@ -125,6 +125,9 @@ async function handleDomainInput(rawInput) {
   // Queue latest domain if already processing
   if (isProcessing) {
     pendingDomain = domain;
+    // Cancel any in-flight background requests for the previous domain
+    try { window.__apiLoadState?.mobileCtrl?.abort(); } catch {}
+    try { window.__apiLoadState?.apiCtrl?.abort(); } catch {}
     return;
   }
 
@@ -206,6 +209,26 @@ document.addEventListener("DOMContentLoaded", () => {
   // TYPING (debounced 500ms) → validate + process
   websiteInput.addEventListener("input", () => {
     if (!userHasTyped) userHasTyped = true;
+
+    // Immediate cancel of any in-flight loads when user changes URL
+    try { window.__apiLoadState?.mobileCtrl?.abort(); } catch {}
+    try { window.__apiLoadState?.apiCtrl?.abort(); } catch {}
+    try {
+      if (typeof storedApiData === 'object' && storedApiData) {
+        storedApiData.loading = false;
+        storedApiData.isLoading = false;
+      }
+    } catch {}
+    // Clear global loading message immediately
+    try {
+      const el = document.getElementById('dataLoadingStatus');
+      if (el) { el.classList.add('hidden'); el.innerHTML = ''; }
+    } catch {}
+    // Restore Generate button label (navigation will handle disabled state)
+    try {
+      const genBtn = document.getElementById('generateProgramButton');
+      if (genBtn) genBtn.innerHTML = 'Generate Program';
+    } catch {}
 
     clearTimeout(typingTimeout);
     typingTimeout = setTimeout(() => {
@@ -295,7 +318,7 @@ function maybeWarnIfUnresolvable(domain, result) {
   const warn = document.createElement('div');
   warn.id = 'urlResolveWarn';
   warn.className = 'text-amber-600 mt-1 text-sm';
-  warn.textContent = `Warning: ${domain} did not resolve via DNS. You can continue, but results may be limited.`;
+  warn.textContent = `Warning: ${domain} was not found. Any mobile apps or APIs will not be automatically included. You can still select a reward tier and generate the scope.`;
 
   inputEl.insertAdjacentElement('afterend', warn);
 
