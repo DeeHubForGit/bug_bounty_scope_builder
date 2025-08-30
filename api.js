@@ -60,10 +60,31 @@ function getJsonErrorMessage(json, fallback) {
   return fallback || 'Request failed';
 }
 
+function normalizeApiDetails(json) {
+  // Unwrap optional { result: {...} }
+  const src = (json && typeof json.result === 'object') ? json.result : json;
+  const apiUrls = Array.isArray(src?.apiUrls)
+    ? src.apiUrls
+    : (Array.isArray(src?.api_urls) ? src.api_urls : []);
+  const documentationUrls = Array.isArray(src?.documentationUrls)
+    ? src.documentationUrls
+    : (Array.isArray(src?.documentation_urls) ? src.documentation_urls : []);
+  const suggestedApi = src?.suggestedApi || src?.suggested_api || null;
+
+  // Preserve other fields, but ensure our canonical keys exist
+  return {
+    ...(src || {}),
+    apiUrls,
+    documentationUrls,
+    suggestedApi
+  };
+}
+
 function isApiDetailsEmpty(json) {
-  const apiUrls   = Array.isArray(json?.apiUrls) ? json.apiUrls : [];
-  const docs      = Array.isArray(json?.documentationUrls) ? json.documentationUrls : [];
-  const suggested = json?.suggestedApi;
+  const norm = normalizeApiDetails(json);
+  const apiUrls   = Array.isArray(norm.apiUrls) ? norm.apiUrls : [];
+  const docs      = Array.isArray(norm.documentationUrls) ? norm.documentationUrls : [];
+  const suggested = norm?.suggestedApi;
   return apiUrls.length === 0 && docs.length === 0 && !suggested;
 }
 
@@ -582,7 +603,7 @@ async function loadApiDataInBackground(domainArg) {
         if (mySeq !== window.__apiLoadState.seq) return { status: 'stale' };
 
         storedApiData.mobileDetails = parsed.mobileDetails || null;
-        storedApiData.apiDetails    = parsed.apiDetails || null;
+        storedApiData.apiDetails    = parsed.apiDetails ? normalizeApiDetails(parsed.apiDetails) : null;
         storedApiData.loading = false;
         storedApiData.isLoading = false;
         storedApiData.error = null;
@@ -607,7 +628,8 @@ async function loadApiDataInBackground(domainArg) {
     const mobileOk  = mobileRes.status === 'fulfilled' && mobileRes.value && !mobileRes.value.error;
     const apiOk     = apiRes.status === 'fulfilled'    && apiRes.value    && !apiRes.value.error;
     const mobileVal = mobileOk ? mobileRes.value : (mobileRes.status === 'fulfilled' ? mobileRes.value : null);
-    const apiVal    = apiOk    ? apiRes.value    : (apiRes.status === 'fulfilled'    ? apiRes.value    : null);
+    const apiValRaw = apiOk    ? apiRes.value    : (apiRes.status === 'fulfilled'    ? apiRes.value    : null);
+    const apiVal    = apiValRaw ? normalizeApiDetails(apiValRaw) : apiValRaw;
 
     const bothAborted =
       (mobileRes.status === 'rejected' && mobileRes.reason?.name === 'AbortError') &&
@@ -702,7 +724,7 @@ async function loadApiDataInBackground(domainArg) {
       } else if (!mobilePresent && apiPresent) {
         console.log(`✅ Data Retrieval — no mobile apps found for ${domain}`);
       } else {
-        console.log(`✅ Data successfully loaded for ${domain}`);
+        console.log(`✅ Data Retrieval completed without error for ${domain}`);
       }
       return { status: 'ok' };
     } else {
@@ -816,5 +838,6 @@ export {
   showApiResultsPopup, 
   storedApiData,
   checkDomainResolvable,
-  setLoadingStateForInitialStep
+  setLoadingStateForInitialStep,
+  normalizeApiDetails
 };

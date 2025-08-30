@@ -1,6 +1,6 @@
 import { initializeSteps, registerDisplayScope } from './navigation.js';
 import { renderRewardTiers } from './rewards.js';
-import { loadApiDataInBackground, storedApiData, checkDomainResolvable } from './api.js';
+import { loadApiDataInBackground, storedApiData, checkDomainResolvable, normalizeApiDetails } from './api.js';
 import { displayScopePage, buildPartialScopeTextFromApi, showMessageModal } from './scope.js';
 
 // Data is split into three JSON files:
@@ -68,7 +68,7 @@ async function loadAndProcessApiData(domain) {
 
   switch (result?.status) {
     case 'ok':
-      console.log("✅ API data successfully loaded for", domain);
+      console.log("✅ Data Retrieval completed without error for", domain);
       buildPartialScopeTextFromApi();
       break;
 
@@ -433,7 +433,7 @@ function loadDataFromLocalStorage() {
   if (!blob) return;
 
   storedApiData.mobileDetails = blob.mobileDetails || null;
-  storedApiData.apiDetails    = blob.apiDetails || null;
+  storedApiData.apiDetails    = blob.apiDetails ? normalizeApiDetails(blob.apiDetails) : null;
   storedApiData.loading = false;
   storedApiData.isLoading = false;
 
