@@ -466,7 +466,15 @@ async function fetchApiDataOnStartup() {
   }
   hideDomainValidationError();
 
-  // 2) DNS check — BLOCK fetch if confirmed unresolvable; allow on error
+  // 2) Determine if any fetch is needed; if we already have data, skip DNS check entirely
+  const needsMobileData = !storedApiData.mobileDetails;
+  const needsApiData    = !storedApiData.apiDetails;
+  if (!(needsMobileData || needsApiData)) {
+    // Cached data present — do not perform resolvability check on restart
+    return;
+  }
+
+  // 3) DNS check — BLOCK fetch if confirmed unresolvable; allow on error
   let allowFetch = true;
   try {
     if (typeof checkDomainResolvable === 'function') {
@@ -488,10 +496,8 @@ async function fetchApiDataOnStartup() {
   }
   if (!allowFetch) return; // do not preload if DNS doesn't resolve
 
-  // 3) Only preload if we actually need data and nothing is in-flight
-  const needsMobileData = !storedApiData.mobileDetails;
-  const needsApiData    = !storedApiData.apiDetails;
-  if ((needsMobileData || needsApiData) && !storedApiData.loading && !storedApiData.isLoading) {
+  // 4) Only preload if we actually need data and nothing is in-flight
+  if (!storedApiData.loading && !storedApiData.isLoading) {
     loadAndProcessApiData(domain)
       .then((s) => console.log('🔄 Startup API preload status:', s))
       .catch(err => console.warn('Preload failed (non‑blocking):', err));
