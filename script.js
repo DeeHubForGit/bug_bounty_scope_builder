@@ -58,6 +58,9 @@ document.getElementById('websiteUrl')?.addEventListener('input', () => {
 let lastProcessedValue = null;
 let pendingDomain = null;
 let isProcessing = false;
+// Cache the last DNS resolvability verdict to avoid repeated checks
+let lastCheckedDomain = null;           // domain string last resolved
+let lastResolveVerdict = null;          // true | false | null (unknown)
 
 /**
  * Call the background loader, interpret its result, and update the UI.
@@ -117,6 +120,9 @@ async function handleDomainInput(rawInput) {
       if (!window.__apiLoadState) window.__apiLoadState = {};
       window.__apiLoadState.pinned = false;
     } catch {}
+    // New domain -> reset DNS cache
+    lastCheckedDomain = null;
+    lastResolveVerdict = null;
   }
 
   // If empty, clear any messages and stop early
@@ -155,19 +161,29 @@ async function handleDomainInput(rawInput) {
   let allowFetch = true; // default allow
   try {
     if (typeof checkDomainResolvable === 'function') {
-      // Clear any previous DNS warning first
-      document.getElementById('urlResolveWarn')?.remove();
-
-      const resolvable = await checkDomainResolvable(domain); // true | false | null (unknown)
-      if (resolvable === false) {
-        // Confirmed unresolvable -> show warning and BLOCK fetching
-        maybeWarnIfUnresolvable(domain, { resolvable: false });
-        allowFetch = false;
-      } else if (resolvable === true) {
-        allowFetch = true;
+      // Use cached verdict if domain hasn't changed since last check
+      if (lastCheckedDomain === domain && lastResolveVerdict !== null) {
+        allowFetch = (lastResolveVerdict !== false);
+        if (lastResolveVerdict === false) {
+          document.getElementById('urlResolveWarn')?.remove();
+          maybeWarnIfUnresolvable(domain, { resolvable: false });
+        }
       } else {
-        // null/unknown -> allow fetch (bypass only because resolver couldn't confirm)
-        allowFetch = true;
+        // Clear any previous DNS warning first and perform a new check
+        document.getElementById('urlResolveWarn')?.remove();
+        const resolvable = await checkDomainResolvable(domain); // true | false | null (unknown)
+        lastCheckedDomain = domain;
+        lastResolveVerdict = (resolvable === true) ? true : (resolvable === false ? false : null);
+        if (resolvable === false) {
+          // Confirmed unresolvable -> show warning and BLOCK fetching
+          maybeWarnIfUnresolvable(domain, { resolvable: false });
+          allowFetch = false;
+        } else if (resolvable === true) {
+          allowFetch = true;
+        } else {
+          // null/unknown -> allow fetch (bypass only because resolver couldn't confirm)
+          allowFetch = true;
+        }
       }
     }
   } catch (e) {
@@ -179,6 +195,8 @@ async function handleDomainInput(rawInput) {
 
   if (!allowFetch) {
     console.log('🚫 Skipping data retrieval due to DNS not resolving.');
+    // Mark domain as processed to avoid repeated resolvability checks on blur/input
+    lastProcessedValue = domain;
     return;
   }
 
@@ -569,15 +587,26 @@ function handleLoadApiData() {
     let allowFetch = true;
     try {
       if (typeof checkDomainResolvable === 'function') {
-        document.getElementById('urlResolveWarn')?.remove();
-        const resolvable = await checkDomainResolvable(domain);
-        if (resolvable === false) {
-          maybeWarnIfUnresolvable(domain, { resolvable: false });
-          allowFetch = false;
-        } else if (resolvable === true) {
-          allowFetch = true;
+        // Use cached verdict if available for same domain
+        if (lastCheckedDomain === domain && lastResolveVerdict !== null) {
+          allowFetch = (lastResolveVerdict !== false);
+          if (lastResolveVerdict === false) {
+            document.getElementById('urlResolveWarn')?.remove();
+            maybeWarnIfUnresolvable(domain, { resolvable: false });
+          }
         } else {
-          allowFetch = true; // unknown -> allow
+          document.getElementById('urlResolveWarn')?.remove();
+          const resolvable = await checkDomainResolvable(domain);
+          lastCheckedDomain = domain;
+          lastResolveVerdict = (resolvable === true) ? true : (resolvable === false ? false : null);
+          if (resolvable === false) {
+            maybeWarnIfUnresolvable(domain, { resolvable: false });
+            allowFetch = false;
+          } else if (resolvable === true) {
+            allowFetch = true;
+          } else {
+            allowFetch = true; // unknown -> allow
+          }
         }
       }
     } catch (e) {

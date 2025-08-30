@@ -134,6 +134,7 @@ function wireDataButtonDisplayOnly() {
   // Remove any inline onclick and existing listeners by cloning
   const clone = btn.cloneNode(true);
   clone.removeAttribute('onclick'); // safety: kill inline handlers if present
+  clone.disabled = false; // always allow opening the data modal
   btn.parentNode.replaceChild(clone, btn);
 
   // Display-only click handler
@@ -151,6 +152,22 @@ function wireDataButtonDisplayOnly() {
 
 // Ensure it runs after the button exists
 document.addEventListener('DOMContentLoaded', wireDataButtonDisplayOnly);
+
+// Also attach a resilient, delegated listener in case the button is replaced later
+document.addEventListener('click', (e) => {
+  const target = e.target.closest && e.target.closest('#viewDataButton');
+  if (!target) return;
+  e.preventDefault();
+  try {
+    if (storedApiData) {
+      storedApiData.loading = false;
+      storedApiData.isLoading = false;
+    }
+    showApiResultsPopup();
+  } catch (err) {
+    console.warn('Failed to open Program Data modal from delegated handler:', err);
+  }
+});
 
 /**
  * POST request to baseURL + endpoint
