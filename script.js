@@ -467,8 +467,12 @@ async function fetchApiDataOnStartup() {
   hideDomainValidationError();
 
   // 2) Determine if any fetch is needed; if we already have data, skip DNS check entirely
-  const needsMobileData = !storedApiData.mobileDetails;
-  const needsApiData    = !storedApiData.apiDetails;
+  //    Also respect persisted no-data flags so we don't keep refetching on reloads.
+  const noMobileFlag = localStorage.getItem(`noMobileData_${domain}`) === '1';
+  const noApiFlag    = localStorage.getItem(`noApiData_${domain}`) === '1';
+
+  const needsMobileData = !storedApiData.mobileDetails && !noMobileFlag;
+  const needsApiData    = !storedApiData.apiDetails    && !noApiFlag;
   if (!(needsMobileData || needsApiData)) {
     // Cached data present — do not perform resolvability check on restart
     return;

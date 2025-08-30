@@ -67,14 +67,25 @@ function isApiDetailsEmpty(json) {
   return apiUrls.length === 0 && docs.length === 0 && !suggested;
 }
 
+// Consider mobile details "empty" if there are no suggested apps and no alternatives
+function isMobileDetailsEmpty(json) {
+  const suggested = Array.isArray(json?.suggested_apps) ? json.suggested_apps : [];
+  const alts = json?.alternatives || {};
+  const ios = Array.isArray(alts?.iOS) ? alts.iOS : [];
+  const android = Array.isArray(alts?.Android) ? alts.Android : [];
+  return suggested.length === 0 && ios.length === 0 && android.length === 0;
+}
+
 function validateApiDetailsPayload(json) {
   if (!json) return { error: true, message: 'Empty response' };
   if (json.error) return { error: true, message: getJsonErrorMessage(json) };
   if (typeof json.notes === 'string' && json.notes.includes('❌')) {
     return { error: true, message: json.notes };
   }
+  // If empty, that's a valid "no data" outcome — not an error
+  // Callers will decide how to present (typically, omit the section silently)
   if (isApiDetailsEmpty(json)) {
-    return { error: true, message: 'No API details found' };
+    return { error: false };
   }
   return { error: false };
 }
@@ -380,21 +391,37 @@ function showApiResultsPopup() {
   const hasApi    = !!(storedApiData && storedApiData.apiDetails);
   const hasError  = !!(storedApiData && storedApiData.error);
 
-  if (hasMobile || hasApi || storedApiData?.mobileError || storedApiData?.apiError) {
+  // Always render a structured modal whenever we have a storedApiData object
+  if (storedApiData) {
     let html = '';
 
-    if (hasMobile) {
-      html += renderDataSection("📱 Mobile Apps", storedApiData.mobileDetails);
-    } else if (storedApiData?.mobileError) {
-      // per‑section failure banner
-      html += renderPartialError("Mobile Apps", storedApiData.mobileError);
+    const mobileHasData = hasMobile && !isMobileDetailsEmpty(storedApiData.mobileDetails);
+    const apiHasData    = hasApi    && !isApiDetailsEmpty(storedApiData.apiDetails);
+
+    // Optional top notice if both are empty and no per-section errors
+    if (!mobileHasData && !apiHasData && !storedApiData?.mobileError && !storedApiData?.apiError) {
+      html += `
+        <div class="bg-gray-50 border-l-4 border-gray-300 text-gray-700 p-3 mb-3">
+          <div class="text-sm">No data found, you can still select a reward and generate the program.</div>
+        </div>`;
     }
 
-    if (hasApi) {
-      html += renderDataSection("🔗 API Endpoints", storedApiData.apiDetails);
+    // Mobile section
+    if (mobileHasData) {
+      html += renderDataSection("📱 Mobile Apps", storedApiData.mobileDetails);
+    } else if (storedApiData?.mobileError) {
+      html += renderPartialError("Mobile Apps", storedApiData.mobileError);
+    } else {
+      html += `<div class="mb-4"><strong class="text-lg text-blue-700">📱 Mobile Apps</strong><div class="mt-2 text-sm text-gray-600">No mobile apps found</div></div>`;
+    }
+
+    // API section
+    if (apiHasData) {
+      html += renderDataSection("🔗 API", storedApiData.apiDetails);
     } else if (storedApiData?.apiError) {
-      // per‑section failure banner
-      html += renderPartialError("API Endpoints", storedApiData.apiError);
+      html += renderPartialError("API", storedApiData.apiError);
+    } else {
+      html += `<div class="mb-4"><strong class="text-lg text-blue-700">🔗 API</strong><div class="mt-2 text-sm text-gray-600">No API's or documentation found</div></div>`;
     }
 
     contentArea.innerHTML = html || renderNoDataMessage();
@@ -587,12 +614,23 @@ async function loadApiDataInBackground(domainArg) {
       (apiRes.status === 'rejected'    && apiRes.reason?.name    === 'AbortError');
     if (bothAborted) return { status: 'aborted' };
 
-    const mobileError =
+    let mobileError =
       (mobileRes.status === 'rejected' && mobileRes.reason?.name !== 'AbortError') ||
       (mobileRes.status === 'fulfilled' && mobileVal && mobileVal.error);
-    const apiError =
+    // Distinguish between true error and valid "no data" response for API details
+    let apiError =
       (apiRes.status === 'rejected' && apiRes.reason?.name !== 'AbortError') ||
       (apiRes.status === 'fulfilled' && apiVal && apiVal.error);
+    const apiNoData = apiOk && isApiDetailsEmpty(apiVal);
+    const mobileNoData = mobileOk && isMobileDetailsEmpty(mobileVal);
+    if (apiNoData) {
+      // Not an error; just no API endpoints/docs detected
+      apiError = false;
+    }
+    if (mobileNoData) {
+      // Not an error; just no mobile apps detected
+      mobileError = false;
+    }
 
     const mobileReason = mobileError
       ? ((mobileRes.status === 'rejected' && mobileRes.reason?.message) ||
@@ -628,13 +666,19 @@ async function loadApiDataInBackground(domainArg) {
 
     // Partial or full success
     // Persist per-section results
-    storedApiData.mobileDetails = mobileError ? null : mobileVal;
-    storedApiData.apiDetails    = apiError ? null : apiVal;
+    storedApiData.mobileDetails = (mobileError || mobileNoData) ? null : mobileVal;
+    storedApiData.apiDetails    = (apiError || apiNoData) ? null : apiVal;
     storedApiData.mobileError   = mobileReason;
-    storedApiData.apiError      = apiReason;
+    storedApiData.apiError      = apiError ? apiReason : null;
     storedApiData.loading = false;
     storedApiData.isLoading = false;
     storedApiData.error = null;
+
+    // Persist no-data flags per domain for startup behavior
+    try {
+      if (mobileNoData) localStorage.setItem(`noMobileData_${domain}`, '1'); else localStorage.removeItem(`noMobileData_${domain}`);
+      if (apiNoData)    localStorage.setItem(`noApiData_${domain}`, '1');     else localStorage.removeItem(`noApiData_${domain}`);
+    } catch {}
 
     // Save successful/partial results
     try {
@@ -649,7 +693,17 @@ async function loadApiDataInBackground(domainArg) {
     finishIfCurrent();
 
     if (!mobileError && !apiError) {
-      console.log(`✅ API data successfully loaded for ${domain}`);
+      const mobilePresent = !!storedApiData.mobileDetails;
+      const apiPresent =   !!storedApiData.apiDetails;
+      if (!mobilePresent && !apiPresent) {
+        console.log(`✅ Data Retrieval — no mobiles or APIs found for ${domain}`);
+      } else if (!apiPresent && mobilePresent) {
+        console.log(`✅ Data Retrieval — no API endpoints/docs found for ${domain}`);
+      } else if (!mobilePresent && apiPresent) {
+        console.log(`✅ Data Retrieval — no mobile apps found for ${domain}`);
+      } else {
+        console.log(`✅ Data successfully loaded for ${domain}`);
+      }
       return { status: 'ok' };
     } else {
       const parts = [];
