@@ -143,33 +143,33 @@ function getScopeTextFromJSON(scopeText) {
     return `<div class="mb-2">${lines.join('<br>')}</div>`;
   }
   
-  // Build the In‑Scope Assets block for the Scope editor
-  function buildAssetsBlockForScope(storedApiData) {
-    // Use the same URL you already store for scope
-    const domain = (localStorage.getItem('enteredUrl') || '').trim();
-  
-    // Reuse your existing helpers (from your “old code”)
-    const websitesHTML = domain ? formatWebsiteDataForSummary(domain) : '';
-    const mobilesHTML  = formatMobileDataForSummary(storedApiData.mobileDetails);
-    const apisHTML     = formatApiDataForSummary(storedApiData.apiDetails);
-  
-    // Mirror spacing logic used elsewhere
-    const sections = [];
-    if (websitesHTML) sections.push(websitesHTML);
-    if (mobilesHTML)  sections.push(mobilesHTML);
-    if (apisHTML)     sections.push(apisHTML);
-  
-    const assetsContent = sections
-      .map((block, idx) => (idx > 0 ? '<div class="mb-2">&nbsp;</div>' + block : block))
-      .join('');
-  
-    return [
-      '--START IN-SCOPE--',
-      '<p><strong>In-Scope Assets</strong></p>',
-      assetsContent,
-      '\n--END IN-SCOPE--'
-    ].join('');
-  }
+// Build the In-Scope Assets block for the Scope editor
+function buildAssetsBlockForScope(storedApiData) {
+  const domain = (localStorage.getItem('enteredUrl') || '').trim();
+
+  // Build sections
+  const websitesHTML = domain ? formatWebsiteDataForSummary(domain) : '';
+  const mobilesHTML  = formatMobileDataForSummary(storedApiData.mobileDetails);
+  const apisHTML     = formatApiDataForSummary(storedApiData.apiDetails);
+
+  const sections = [];
+  if (websitesHTML) sections.push(websitesHTML);
+  if (mobilesHTML)  sections.push(mobilesHTML);
+  if (apisHTML)     sections.push(apisHTML);
+
+  // Spacer only BETWEEN blocks (none after the last)
+  const assetsContent = sections
+    .map((block, idx) => (idx > 0 ? '<div class="mb-2">&nbsp;</div>' + block : block))
+    .join('');
+
+  // NOTE: no newline before END marker; put END in its own paragraph
+  return [
+    '--START IN-SCOPE--',
+    '<p><strong>In-Scope Assets</strong></p>',
+    assetsContent,
+    '<p>--END IN-SCOPE--</p>'
+  ].join('');
+}
 
 function replaceBlockByMarker(existingHTML, sectionName, replacementBlock) {
   const name = sectionName.toUpperCase();
