@@ -170,40 +170,38 @@ function getScopeTextFromJSON(scopeText) {
       '\n--END IN-SCOPE--'
     ].join('');
   }
-  
-  function replaceBlockByMarker(existingHTML, sectionName, replacementBlock) {
-    const name = sectionName.toUpperCase();
-    const start = `--START ${name}--`;
-    const end   = `--END ${name}--`;
 
-    // Match the marker block, optionally wrapped in a single <p> ... </p>
-    // Be tolerant of leading/trailing <br> tags inside the paragraph
-    const pattern = new RegExp(
-      // optional opening <p>
-      '(?:<p>)?' +
-      // any whitespace or <br> tags before START
-      '\\s*(?:<br\\s*\\/?>\\s*)*' +
-      // START marker
-      start.replace(/[.*+?^${}()|[\\]\\]/g, r => r) +
-      // content up to END
-      '[\\s\\S]*?' +
-      // END marker
-      end.replace(/[.*+?^${}()|[\\]\\]/g, r => r) +
-      // optional whitespace or <br> after END
-      '\\s*(?:<br\\s*\\/?>\\s*)*' +
-      // optional closing </p>
-      '(?:</p>)?',
-      'i'
-    );
-  
-    if (!pattern.test(existingHTML)) {
-      console.warn(`⚠️ Missing markers for "${sectionName}"`);
-      return existingHTML;
-    }
-  
-    return existingHTML.replace(pattern, replacementBlock);
+function replaceBlockByMarker(existingHTML, sectionName, replacementBlock) {
+  const name = sectionName.toUpperCase();
+  const start = `--START ${name}--`;
+  const end   = `--END ${name}--`;
+
+  // Match exactly from START..END (optionally wrapped by a single <p>),
+  // but DO NOT consume any whitespace/<br> that appears BEFORE START.
+  const pattern = new RegExp(
+    // optional opening <p>
+    '(?:<p>)?' +
+    // START marker (no leading whitespace/br eater here)
+    start.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') +
+    // content up to END
+    '[\\s\\S]*?' +
+    // END marker
+    end.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') +
+    // optional whitespace or <br> after END
+    '\\s*(?:<br\\s*\\/?>\\s*)*' +
+    // optional closing </p>
+    '(?:</p>)?',
+    'i'
+  );
+
+  if (!pattern.test(existingHTML)) {
+    console.warn(`⚠️ Missing markers for "${sectionName}"`);
+    return existingHTML;
   }
-  
+
+  return existingHTML.replace(pattern, replacementBlock);
+}  
+
 /**
  * Build or update the partial scope text for the Scope step.
  * - For new/reset: Use template from JSON and insert assets.
@@ -344,7 +342,7 @@ function displayScopePage(rewards, scopeText) {
              || localStorage.getItem('partialScopeHTML');
 
   if (!existing) {
-    console.warn('⚠️ No partialScopeHTML found — fallback to generating full scope.');
+    console.log('No partialScopeHTML found (data may not have been retrieved for the domain). Fallback to generating full scope.');
     const scopeHTML = getFinalScopeHTML(storedApiData, rewards, scopeText);
     finalInput.value = scopeHTML;
     finalInput.dispatchEvent(new Event('input', { bubbles: true }));
