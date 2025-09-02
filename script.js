@@ -22,6 +22,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Make the shared API data store available globally for modules that read window.storedApiData
   // (e.g., scope.js uses window.storedApiData inside displayScopePage/builders)
   try { window.storedApiData = storedApiData; } catch (_) {}
+
   // Load all required app config (settings, scope text, rewards)
   // before setting up the wizard interface
   loadAppConfig()
@@ -31,13 +32,44 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // B) If a domain exists and cached API data is missing, preload it 
       fetchApiDataOnStartup();
-      
+
       // C) Initialise UI
       registerDisplayScope(displayScope);
       renderRewardTiers(rewards);
       // Restore URL first so initial sync in initializeSteps sees it
       setupUrlPersistence();
       initializeSteps();
+
+      // --- NEW: react to API lifecycle while on the FINAL step ---
+      // Disable/enable FINAL-step controls during background loads
+      window.addEventListener('api-loading-started', () => {
+        const finalStep = document.getElementById('final-step');
+        if (finalStep && !finalStep.classList.contains('hidden')) {
+          setLoadingStateForFinalStep(true);
+        }
+      });
+
+      window.addEventListener('api-loading-finished', () => {
+        const finalStep = document.getElementById('final-step');
+        if (finalStep && !finalStep.classList.contains('hidden')) {
+          setLoadingStateForFinalStep(false);
+        }
+      });
+
+      // If data updates while viewing FINAL, refresh the rendered scope
+      window.addEventListener('api-data-updated', () => {
+        const finalStep = document.getElementById('final-step');
+        if (finalStep && !finalStep.classList.contains('hidden')) {
+          displayScopePage(rewards, scopeText);
+        }
+      });
+
+      // When FINAL becomes visible, immediately set the busy state based on current loading flags
+      window.addEventListener('final-step-shown', () => {
+        const busy = !!(window.storedApiData && (window.storedApiData.loading || window.storedApiData.isLoading));
+        setLoadingStateForFinalStep(busy);
+      });
+      // --- END NEW ---
 
       // D) Set up autosave so scope is saved when the form is closed
       setupScopeAutosave();
@@ -48,9 +80,39 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
+// Clear DNS warning as user types a URL
 document.getElementById('websiteUrl')?.addEventListener('input', () => {
   document.getElementById('urlResolveWarn')?.remove();
 });
+
+// Disable/enable controls on the final page while we rebuild the scope.
+function setLoadingStateForFinalStep(isLoading) {
+  const finalEditor = document.getElementById('finalSummaryContent');
+  const generateBtn = document.getElementById('generateProgramButton');
+  const viewDataBtn = document.getElementById('viewApiButton');
+  // Support both ids in case the template uses "cancelButton" instead of "backButton"
+  const backOrCancelBtn = document.getElementById('backButton') || document.getElementById('cancelButton');
+
+  // Disable/enable buttons
+  [generateBtn, viewDataBtn, backOrCancelBtn].forEach(btn => {
+    if (!btn) return;
+    btn.disabled = !!isLoading;
+    btn.classList.toggle('opacity-50', !!isLoading);
+    btn.classList.toggle('cursor-not-allowed', !!isLoading);
+  });
+
+  // Optional: show a subtle inline loader on the editor
+  if (finalEditor) {
+    finalEditor.classList.toggle('pointer-events-none', !!isLoading);
+    finalEditor.classList.toggle('opacity-75', !!isLoading);
+  }
+}
+
+// Small helper so we don’t have to guess page index elsewhere
+function isOnFinalStep() {
+  const finalStep = document.getElementById('final-step');
+  return finalStep && !finalStep.classList.contains('hidden');
+}
 
 // ─────────────────────────────────────────────────────────────
 // State for URL processing
@@ -69,37 +131,43 @@ let lastResolveVerdict = null;          // true | false | null (unknown)
 async function loadAndProcessApiData(domain) {
   const result = await loadApiDataInBackground(domain);
 
+  let shouldRebuild = false;
   switch (result?.status) {
     case 'ok':
       console.log("✅ Data Retrieval completed without error for", domain);
-      buildPartialScopeTextFromApi();
+      shouldRebuild = true;
       break;
-
     case 'partial':
       console.warn(`⚠️ Partial API load for ${domain}: ${result.details || ''}`);
-      // Still build partial scope so the user sees whatever we have
-      buildPartialScopeTextFromApi();
+      shouldRebuild = true;
       break;
-
     case 'cached':
       console.log("ℹ️ Using cached API data for", domain);
-      buildPartialScopeTextFromApi();
+      shouldRebuild = true;
       break;
-
     case 'error':
       console.error(`❌ Failed to load API data for ${domain}: ${result.details || ''}`);
       break;
-
     case 'aborted':
     case 'stale':
-      // Superseded by a newer request; do not update lastProcessedValue
-      console.log("⏹️ Request superseded; ignoring result for", domain);
-      break;
-
+        // Superseded by a newer request; do not update lastProcessedValue
+        console.log("⏹️ Request superseded; ignoring result for", domain);
+        break;
     case 'noop':
     default:
-      // Nothing to do
       break;
+  }
+
+  if (shouldRebuild) {
+    // Rebuild partial (assets) with the new/cached data
+    buildPartialScopeTextFromApi();
+
+    // If we're already on the FINAL page, re-render it with the latest
+    if (isOnFinalStep()) {
+      // No setLoadingStateForFinalStep() here — the fetch busy state is handled
+      // by the global api-loading-* listeners you wired in script.js.
+      displayScopePage(rewards, scopeText);
+    }
   }
 
   return result?.status || 'noop';

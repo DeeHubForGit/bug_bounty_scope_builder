@@ -130,33 +130,35 @@ function updateGenerateProgramButton(stepIndex) {
 /* ──────────────────────────────────────────────────────────────
    Step switching
    ────────────────────────────────────────────────────────────── */
-   function showStep(stepIndex) {
-    const changed = stepIndex !== currentStepIndex;
-  
-    // Only toggle step visibility if the step actually changed
-    if (changed) {
-      for (let i = 0; i < steps.length; i++) {
-        const el = steps[i];
-        if (!el) continue;
-        if (i === stepIndex) el.classList.remove('hidden');
-        else el.classList.add('hidden');
-      }
-      currentStepIndex = stepIndex;
-      localStorage.setItem('currentStepIndex', stepIndex);
+function showStep(stepIndex) {
+  const changed = stepIndex !== currentStepIndex;
+
+  // Only toggle step visibility if the step actually changed
+  if (changed) {
+    for (let i = 0; i < steps.length; i++) {
+      const el = steps[i];
+      if (!el) continue;
+      if (i === stepIndex) el.classList.remove('hidden');
+      else el.classList.add('hidden');
     }
-  
-    // Render final scope only on first entry into FINAL
-    if (changed && stepIndex === StepIndex.FINAL && typeof displayScopeFn === 'function') {
-      displayScopeFn();
-    }
-  
-    // ✅ Always run control updates (even on initial paint when stepIndex === 0)
-    updateDataButton(stepIndex);        // respects config and step
-    updateResetButton();                // respects config
-    updateBackButton(stepIndex);        // show on FINAL only
-    updateGenerateProgramButton(stepIndex); // hide on FINAL
-    syncGenerateButtonState();          // keep Generate visual state in sync
-  }  
+    currentStepIndex = stepIndex;
+    localStorage.setItem('currentStepIndex', stepIndex);
+  }
+
+  // Render final scope only on first entry into FINAL
+  if (changed && stepIndex === StepIndex.FINAL && typeof displayScopeFn === 'function') {
+    displayScopeFn();
+    // NEW: tell script.js that FINAL is now shown so it can toggle loading state immediately
+    try { window.dispatchEvent(new CustomEvent('final-step-shown')); } catch {}
+  }
+
+  // ✅ Always run control updates (even on initial paint when stepIndex === 0)
+  updateDataButton(stepIndex);             // respects config and step
+  updateResetButton();                     // respects config
+  updateBackButton(stepIndex);             // show on FINAL only
+  updateGenerateProgramButton(stepIndex);  // hide on FINAL
+  syncGenerateButtonState();               // keep Generate visual state in sync
+}
 
 /* ──────────────────────────────────────────────────────────────
    Public navigation

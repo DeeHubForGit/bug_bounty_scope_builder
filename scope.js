@@ -202,6 +202,20 @@ function replaceBlockByMarker(existingHTML, sectionName, replacementBlock) {
   return existingHTML.replace(pattern, replacementBlock);
 }  
 
+function extractBlockByMarker(html, sectionName) {
+  const name = sectionName.toUpperCase();
+  const start = `--START ${name}--`;
+  const end   = `--END ${name}--`;
+  const re = new RegExp(
+    start.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') +
+    '[\\s\\S]*?' +
+    end.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
+    'i'
+  );
+  const m = html.match(re);
+  return m ? m[0] : '';
+}
+
 /**
  * Build or update the partial scope text for the Scope step.
  * - For new/reset: Use template from JSON and insert assets.
@@ -210,6 +224,8 @@ function replaceBlockByMarker(existingHTML, sectionName, replacementBlock) {
 function buildPartialScopeTextFromApi() {
   const storedApiData = window.storedApiData || {};
   const currentDomain = (document.getElementById('websiteUrl')?.value || '').trim().toLowerCase();
+
+  console.log('buildPartialScopeTextFromApi fired');
 
   // Use JSON-loaded default (window.scopeText) exclusively
   let scopeText = window.scopeText;
@@ -220,7 +236,7 @@ function buildPartialScopeTextFromApi() {
     return;
   }
 
-  // Build assets block
+  // Build assets block from current data
   const assetsBlock = buildAssetsBlockForScope(storedApiData);
   let finalHTML;
 
@@ -232,13 +248,19 @@ function buildPartialScopeTextFromApi() {
   const initialDomain = localStorage.getItem('initialDomain');
 
   if (existing && existing.includes('--START IN-SCOPE--')) {
-    const isUrlChanged = initialDomain && initialDomain !== currentDomain;
+    const isUrlChanged = !!(initialDomain && initialDomain !== currentDomain);
 
-    if (isUrlChanged) {
-      console.log('🔄 URL changed — updating assets block in existing scope');
+    // Compare old vs new assets to detect actual content changes
+    const oldAssets = extractBlockByMarker(existing, 'IN-SCOPE').trim();
+    const newAssets = assetsBlock.trim();
+    const assetsChanged = oldAssets !== newAssets;
+
+    if (isUrlChanged || assetsChanged) {
+      console.log('🔄 Replacing assets block',
+        isUrlChanged ? '(URL changed)' : '(data changed)');
       finalHTML = replaceBlockByMarker(existing, 'IN-SCOPE', assetsBlock);
     } else {
-      console.log('✅ Existing scope retained (no URL change)');
+      console.log('✅ Keeping existing assets block (no change)');
       finalHTML = existing;
     }
   } else {
