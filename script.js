@@ -87,12 +87,8 @@ document.addEventListener('DOMContentLoaded', () => {
       initializeSteps();
       
       // E) If a domain exists and cached API data is missing, preload it 
-      const savedUrl = localStorage.getItem('enteredUrl');
-      if (savedUrl) {
-        console.log('Found saved URL, fetching API data:', savedUrl);
-        fetchApiDataOnStartup();
-      }
-
+      fetchApiDataOnStartup();
+      
       // --- NEW: react to API lifecycle while on the FINAL step ---
       // Disable/enable FINAL-step controls during background loads
       window.addEventListener('api-loading-started', () => {
@@ -581,6 +577,9 @@ function loadDataFromLocalStorage() {
     mobileDetails: !!storedApiData.mobileDetails,
     apiDetails: !!storedApiData.apiDetails
   });
+  
+  // Trigger UI update with cached data
+  try { window.dispatchEvent(new CustomEvent('api-data-updated')); } catch {}
 }
 
 /**
@@ -595,16 +594,21 @@ async function fetchApiDataOnStartup() {
   if (!raw) return;
 
   const domain = extractDomain(raw);
-  console.log('Checking domain in fetchApiDataOnStartup:', domain);
-
-  // 1) Validate saved value; but don't remove it if invalid
-  if (!isValidDomainOrUrl(domain)) {
-    console.log('Invalid domain in fetchApiDataOnStartup, skipping fetch:', domain);
-    // Don't remove from localStorage, we want to keep the invalid URL
-    showDomainValidationError();
-    return;
+  
+  // Only validate URL if we don't have cached data.  If we have data then the URL should be valid.
+  const hasCachedData = storedApiData.apiDetails || storedApiData.mobileDetails;
+  
+  if (!hasCachedData) {
+    console.log('No cached data, validating domain:', domain);
+    if (!isValidDomainOrUrl(domain)) {
+      console.log('Invalid domain in fetchApiDataOnStartup, skipping fetch:', domain);
+      showDomainValidationError();
+      return;
+    }
+    hideDomainValidationError();
+  } else {
+    console.log('Using cached data for domain:', domain);
   }
-  hideDomainValidationError();
 
   // 2) Determine if any fetch is needed; if we already have data, skip DNS check entirely
   //    Also respect persisted no-data flags so we don't keep refetching on reloads.
@@ -953,12 +957,9 @@ function performReset() {
   // Remove DNS resolution warning, if any
   document.getElementById('urlResolveWarn')?.remove();
 
-  // Disable buttons explicitly
+  // Disable generate button explicitly
   const generateBtn = document.getElementById('generateProgramButton');
   if (generateBtn) generateBtn.disabled = true;
-
-  const viewDataBtn = document.getElementById('viewDataButton');
-  if (viewDataBtn) viewDataBtn.disabled = true;
 
   // Hide inline loading/retry UI if present
   const loadingEl = document.getElementById('dataLoadingStatus');
