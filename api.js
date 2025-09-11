@@ -126,48 +126,6 @@ function normalizeDomain(input = '') {
   return s.split('/')[0];
 }
 
-// api.js — make the Data button DISPLAY‑ONLY (no fetches)
-function wireDataButtonDisplayOnly() {
-  const btn = document.getElementById('viewDataButton');
-  if (!btn) return;
-
-  // Remove any inline onclick and existing listeners by cloning
-  const clone = btn.cloneNode(true);
-  clone.removeAttribute('onclick'); // safety: kill inline handlers if present
-  clone.disabled = false; // always allow opening the data modal
-  btn.parentNode.replaceChild(clone, btn);
-
-  // Display-only click handler
-  clone.addEventListener('click', (e) => {
-    e.preventDefault();
-    // Never fetch: ensure loading flags are off so UI shows cached state only
-    if (storedApiData) {
-      storedApiData.loading = false;
-      storedApiData.isLoading = false;
-    }
-    // Just render whatever is cached (memory/localStorage). No fetch.
-    showApiResultsPopup();
-  });
-}
-
-// Ensure it runs after the button exists
-document.addEventListener('DOMContentLoaded', wireDataButtonDisplayOnly);
-
-// Also attach a resilient, delegated listener in case the button is replaced later
-document.addEventListener('click', (e) => {
-  const target = e.target.closest && e.target.closest('#viewDataButton');
-  if (!target) return;
-  e.preventDefault();
-  try {
-    if (storedApiData) {
-      storedApiData.loading = false;
-      storedApiData.isLoading = false;
-    }
-    showApiResultsPopup();
-  } catch (err) {
-    console.warn('Failed to open Program Data modal from delegated handler:', err);
-  }
-});
 
 /**
  * POST request to baseURL + endpoint
@@ -632,7 +590,7 @@ async function loadApiDataInBackground(domainArg) {
         storedApiData.error = null;
         storedApiData.mobileError = null;
         storedApiData.apiError = null;
-
+        
         finishIfCurrent();
         try { window.dispatchEvent(new CustomEvent('api-data-updated')); } catch {}
         console.log("✅ Loaded cached API data for", domain);
@@ -727,12 +685,14 @@ async function loadApiDataInBackground(domainArg) {
 
     // Save successful/partial results
     try {
-      localStorage.setItem(
-        `apiData_${domain}`,
-        JSON.stringify({ mobileDetails: storedApiData.mobileDetails, apiDetails: storedApiData.apiDetails })
-      );
-    } catch (saveError) {
-      console.error("Error saving API data to localStorage:", saveError);
+      const toCache = {
+        mobileDetails: storedApiData.mobileDetails,
+        apiDetails: storedApiData.apiDetails,
+        timestamp: new Date().toISOString()
+      };
+      localStorage.setItem(`apiData_${domain}`, JSON.stringify(toCache));
+    } catch (e) {
+      console.warn("Failed to cache API data:", e);
     }
 
     finishIfCurrent();

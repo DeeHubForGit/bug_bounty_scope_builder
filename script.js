@@ -1,6 +1,6 @@
 import { initializeSteps, registerDisplayScope } from './navigation.js';
 import { renderRewardTiers } from './rewards.js';
-import { loadApiDataInBackground, storedApiData, checkDomainResolvable, normalizeApiDetails } from './api.js';
+import { loadApiDataInBackground, storedApiData, checkDomainResolvable, normalizeApiDetails, showApiResultsPopup } from './api.js';
 import { displayScopePage, buildPartialScopeTextFromApi, showMessageModal } from './scope.js';
 
 // Data is split into three JSON files:
@@ -17,28 +17,81 @@ let __didFetchApiDataOnStartup = false;
 let typingTimeout = null;
 let userHasTyped = false;
 
+// Initialize data button handler
+function initDataButton() {
+  console.log('Initializing data button...');
+  const dataBtn = document.getElementById('viewDataButton');
+  if (!dataBtn) {
+    console.error('Data button not found in DOM');
+    return;
+  }
+  
+  // Remove any existing listeners
+  const newBtn = dataBtn.cloneNode(true);
+  dataBtn.parentNode.replaceChild(newBtn, dataBtn);
+  
+  // Enable button by default
+  newBtn.disabled = false;
+  
+  // Add click handler
+  newBtn.addEventListener('click', () => {
+    if (!storedApiData) {
+      console.warn('No API data available');
+      return;
+    }
+    
+    // Show the popup
+    if (typeof showApiResultsPopup === 'function') {
+      showApiResultsPopup(storedApiData);
+    } else {
+      console.error('showApiResultsPopup function not found');
+    }
+  });
+  
+  console.log('Data button initialized');
+  return newBtn;
+}
+
 // Run this once the DOM is fully loaded
 document.addEventListener('DOMContentLoaded', () => {
-  // Make the shared API data store available globally for modules that read window.storedApiData
-  // (e.g., scope.js uses window.storedApiData inside displayScopePage/builders)
-  try { window.storedApiData = storedApiData; } catch (_) {}
+  console.log('DOMContentLoaded - Initializing app...');
+  
+  // Make the shared API data store available globally
+  try { 
+    window.storedApiData = storedApiData; 
+    console.log('Global storedApiData initialized');
+    
+    // Initialize data button
+    initDataButton();
+    
+  } catch (error) {
+    console.error('Failed to initialize app:', error);
+  }
 
   // Load all required app config (settings, scope text, rewards)
-  // before setting up the wizard interface
   loadAppConfig()
     .then(() => {
-      // A) Restore cached API data if present
+      console.log('App config loaded, initializing UI...');
+      
+      // A) Restore URL first before anything else
+      setupUrlPersistence();
+      
+      // B) Restore cached API data if present
       loadDataFromLocalStorage();
-
-      // B) If a domain exists and cached API data is missing, preload it 
-      fetchApiDataOnStartup();
-
-      // C) Initialise UI
+      
+      // C) Initialize UI components
       registerDisplayScope(displayScope);
       renderRewardTiers(rewards);
-      // Restore URL first so initial sync in initializeSteps sees it
-      setupUrlPersistence();
+      
+      // D) Initialize the wizard steps
       initializeSteps();
+      
+      // E) If a domain exists and cached API data is missing, preload it 
+      const savedUrl = localStorage.getItem('enteredUrl');
+      if (savedUrl) {
+        console.log('Found saved URL, fetching API data:', savedUrl);
+        fetchApiDataOnStartup();
+      }
 
       // --- NEW: react to API lifecycle while on the FINAL step ---
       // Disable/enable FINAL-step controls during background loads
@@ -519,7 +572,7 @@ function loadDataFromLocalStorage() {
   if (!blob) return;
 
   storedApiData.mobileDetails = blob.mobileDetails || null;
-  storedApiData.apiDetails    = blob.apiDetails ? normalizeApiDetails(blob.apiDetails) : null;
+  storedApiData.apiDetails = blob.apiDetails ? normalizeApiDetails(blob.apiDetails) : null;
   storedApiData.loading = false;
   storedApiData.isLoading = false;
 
@@ -542,12 +595,13 @@ async function fetchApiDataOnStartup() {
   if (!raw) return;
 
   const domain = extractDomain(raw);
+  console.log('Checking domain in fetchApiDataOnStartup:', domain);
 
-  // 1) Validate saved value; scrub if bad
+  // 1) Validate saved value; but don't remove it if invalid
   if (!isValidDomainOrUrl(domain)) {
-    localStorage.removeItem('enteredUrl');
-    hideDomainValidationError();        // nothing to validate yet
-    document.getElementById('urlResolveWarn')?.remove();
+    console.log('Invalid domain in fetchApiDataOnStartup, skipping fetch:', domain);
+    // Don't remove from localStorage, we want to keep the invalid URL
+    showDomainValidationError();
     return;
   }
   hideDomainValidationError();
@@ -612,22 +666,71 @@ function extractDomain(input) {
 }
 
 function setupUrlPersistence() {
+  console.log('Setting up URL persistence...');
   const urlInput = document.getElementById('websiteUrl');
-  if (!urlInput) return;
-
-  // Restore saved value on load (already normalised if we saved it that way)
-  const savedUrl = localStorage.getItem('enteredUrl');
-  if (savedUrl) {
-    urlInput.value = savedUrl;
-    // Do NOT dispatch 'input' here — it causes unintended loading
-    // urlInput.dispatchEvent(new Event('input')); // ✅ Only trigger if restoring
+  if (!urlInput) {
+    console.error('URL input element not found');
+    return;
   }
 
-  // Save normalised value on change
-  urlInput.addEventListener('input', () => {
-    const normalised = extractDomain(urlInput.value);
-    localStorage.setItem('enteredUrl', normalised);
+  // Function to save the current URL
+  const saveCurrentUrl = (event) => {
+    if (event) event.preventDefault();
+    
+    const value = urlInput.value.trim();
+    console.log('Saving URL:', value);
+    
+    if (value) {
+      try {
+        const domain = extractDomain(value);
+        console.log('Extracted domain:', domain);
+        
+        // Always save the URL, even if invalid
+        localStorage.setItem('enteredUrl', domain);
+        console.log('Saved to localStorage');
+        
+        // Update the input with the normalized value
+        if (urlInput.value !== domain) {
+          urlInput.value = domain;
+        }
+        
+        // Validate the domain
+        if (!isValidDomainOrUrl(domain)) {
+          console.log('Invalid domain, showing validation error');
+          showDomainValidationError();
+        } else {
+          hideDomainValidationError();
+        }
+      } catch (error) {
+        console.error('Error saving URL:', error);
+      }
+    }
+  };
+
+  // Restore saved value on load
+  const savedUrl = localStorage.getItem('enteredUrl');
+  if (savedUrl) {
+    console.log('Restoring saved URL:', savedUrl);
+    urlInput.value = savedUrl;
+    
+    // Validate the restored URL
+    if (!isValidDomainOrUrl(extractDomain(savedUrl))) {
+      console.log('Restored URL is invalid, showing error');
+      showDomainValidationError();
+    }
+  }
+
+  // Save on input (debounced)
+  let saveTimeout;
+  urlInput.addEventListener('input', (e) => {
+    clearTimeout(saveTimeout);
+    saveTimeout = setTimeout(() => saveCurrentUrl(e), 500);
   });
+
+  // Also save on blur to catch any final input
+  urlInput.addEventListener('blur', saveCurrentUrl);
+  
+  console.log('URL persistence setup complete');
 }
 
 // API
@@ -641,9 +744,15 @@ function handleLoadApiData() {
 
   const domain = extractDomain(enteredUrl);
 
-  // ✅ Validate here too
+  // Handle invalid URLs - just save the URL and show validation error
   if (!isValidDomainOrUrl(domain)) {
     showDomainValidationError();
+    // Save the URL to localStorage to persist it
+    localStorage.setItem('enteredUrl', domain);
+    // Update the input field with the invalid URL
+    if (urlInput) {
+      urlInput.value = domain;
+    }
     return;
   }
   hideDomainValidationError();
