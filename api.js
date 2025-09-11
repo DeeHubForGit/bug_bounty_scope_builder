@@ -424,20 +424,31 @@ function showApiResultsPopup() {
     storedApiData.isLoading = false;
   }
 
-  // Decide what to render from CACHE ONLY
-  const hasMobile = !!(storedApiData && storedApiData.mobileDetails);
-  const hasApi    = !!(storedApiData && storedApiData.apiDetails);
-  const hasError  = !!(storedApiData && storedApiData.error);
+  // Check if we have any data to show
+  const hasMobile = !!(storedApiData?.mobileDetails);
+  const hasApi = !!(storedApiData?.apiDetails);
+  const hasError = !!(storedApiData?.error);
+  
+  let html = '';
 
-  // Always render a structured modal whenever we have a storedApiData object
-  if (storedApiData) {
-    let html = '';
-
+  if (hasError) {
+    // Show error message if there was an error
+    html = renderErrorMessage(storedApiData.error);
+  } else if (!hasMobile && !hasApi) {
+    // No data case - show empty state
+    html = `
+      <div class="p-4 text-center">
+        <div class="text-gray-500 mb-2">No data available</div>
+        <p class="text-sm text-gray-600">Enter a valid URL to load data</p>
+      </div>
+    `;
+  } else {
+    // We have some data to show
     const mobileHasData = hasMobile && !isMobileDetailsEmpty(storedApiData.mobileDetails);
-    const apiHasData    = hasApi    && !isApiDetailsEmpty(storedApiData.apiDetails);
+    const apiHasData = hasApi && !isApiDetailsEmpty(storedApiData.apiDetails);
 
-    // Optional top notice if both are empty and no per-section errors
-    if (!mobileHasData && !apiHasData && !storedApiData?.mobileError && !storedApiData?.apiError) {
+    // Optional top notice if both are empty
+    if (!mobileHasData && !apiHasData) {
       html += `
         <div class="bg-gray-50 border-l-4 border-gray-300 text-gray-700 p-3 mb-3">
           <div class="text-sm">No data found, you can still select a reward and generate the program.</div>
@@ -461,15 +472,10 @@ function showApiResultsPopup() {
     } else {
       html += `<div class="mb-4"><strong class="text-lg text-blue-700">🔗 API</strong><div class="mt-2 text-sm text-gray-600">No API's or documentation found</div></div>`;
     }
-
-    contentArea.innerHTML = html || renderNoDataMessage();
-  } else if (hasError) {
-    // Show cached error message
-    contentArea.innerHTML = renderErrorMessage(storedApiData.error);
-  } else {
-    // No cached data — show a friendly notice
-    contentArea.innerHTML = renderNoDataMessage();
   }
+
+  // Set the content
+  contentArea.innerHTML = html || renderNoDataMessage();
 
   // Wire up the Retry button inside the modal (if present)
   const retryBtn = contentArea.querySelector('#retryApiButton');
