@@ -610,15 +610,19 @@ async function fetchApiDataOnStartup() {
     console.log('Using cached data for domain:', domain);
   }
 
-  // 2) Determine if any fetch is needed; if we already have data, skip DNS check entirely
-  //    Also respect persisted no-data flags so we don't keep refetching on reloads.
+  // 2) Determine if any fetch is needed
+  // Check if we have mobile data or if it previously failed
   const noMobileFlag = localStorage.getItem(`noMobileData_${domain}`) === '1';
-  const noApiFlag    = localStorage.getItem(`noApiData_${domain}`) === '1';
-
-  const needsMobileData = !storedApiData.mobileDetails && !noMobileFlag;
-  const needsApiData    = !storedApiData.apiDetails    && !noApiFlag;
+  const noApiFlag = localStorage.getItem(`noApiData_${domain}`) === '1';
+  
+  // If we have a mobile error in the stored data, we should retry
+  const hasMobileError = storedApiData.mobileError || (storedApiData.error && storedApiData.error.details?.includes('Mobile:'));
+  
+  const needsMobileData = (!storedApiData.mobileDetails || hasMobileError) && !noMobileFlag;
+  const needsApiData = !storedApiData.apiDetails && !noApiFlag;
+  
   if (!(needsMobileData || needsApiData)) {
-    // Cached data present — do not perform resolvability check on restart
+    // No need to fetch anything
     return;
   }
 
