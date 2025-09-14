@@ -574,7 +574,7 @@ async function loadApiDataInBackground(domainArg) {
   };
 
   try {
-    console.log("Loading API data in background for domain:", domain);
+    console.log("Loading data in background for domain:", domain);
 
     // Check if we have cached data for this domain
     const savedData = localStorage.getItem(`apiData_${domain}`);

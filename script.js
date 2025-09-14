@@ -19,7 +19,6 @@ let userHasTyped = false;
 
 // Initialize data button handler
 function initDataButton() {
-  console.log('Initializing data button...');
   const dataBtn = document.getElementById('viewDataButton');
   if (!dataBtn) {
     console.error('Data button not found in DOM');
@@ -48,18 +47,15 @@ function initDataButton() {
     }
   });
   
-  console.log('Data button initialized');
   return newBtn;
 }
 
 // Run this once the DOM is fully loaded
 document.addEventListener('DOMContentLoaded', () => {
-  console.log('DOMContentLoaded - Initializing app...');
   
   // Make the shared API data store available globally
   try { 
     window.storedApiData = storedApiData; 
-    console.log('Global storedApiData initialized');
     
     // Initialize data button
     initDataButton();
@@ -71,7 +67,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Load all required app config (settings, scope text, rewards)
   loadAppConfig()
     .then(() => {
-      console.log('App config loaded, initializing UI...');
+      //console.log('App config loaded, initializing UI...');
       
       // A) Restore URL first before anything else
       setupUrlPersistence();
@@ -572,7 +568,7 @@ function loadDataFromLocalStorage() {
   storedApiData.loading = false;
   storedApiData.isLoading = false;
 
-  console.log('♻️ Loaded cached API data', {
+  console.log('♻️ Loaded cached data', {
     domain: savedDomain,
     mobileDetails: !!storedApiData.mobileDetails,
     apiDetails: !!storedApiData.apiDetails
@@ -674,7 +670,7 @@ function extractDomain(input) {
 }
 
 function setupUrlPersistence() {
-  console.log('Setting up URL persistence...');
+  //console.log('Setting up URL persistence...');
   const urlInput = document.getElementById('websiteUrl');
   if (!urlInput) {
     console.error('URL input element not found');
@@ -738,7 +734,7 @@ function setupUrlPersistence() {
   // Also save on blur to catch any final input
   urlInput.addEventListener('blur', saveCurrentUrl);
   
-  console.log('URL persistence setup complete');
+  //console.log('URL persistence setup complete');
 }
 
 // API

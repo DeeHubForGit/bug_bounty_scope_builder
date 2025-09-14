@@ -224,9 +224,7 @@ function extractBlockByMarker(html, sectionName) {
 function buildPartialScopeTextFromApi() {
   const storedApiData = window.storedApiData || {};
   const currentDomain = (document.getElementById('websiteUrl')?.value || '').trim().toLowerCase();
-
-  console.log('buildPartialScopeTextFromApi fired');
-
+  
   // Use JSON-loaded default (window.scopeText) exclusively
   let scopeText = window.scopeText;
 
