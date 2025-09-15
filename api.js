@@ -591,8 +591,8 @@ async function loadApiDataInBackground(domainArg) {
   storedApiData.mobileError = null;
   storedApiData.apiError = null;
 
-  // Show loading indicators
-  showGlobalLoadingMessage(domain);
+  // Show loading indicators (neutral until we know which sides we will fetch)
+  showGlobalLoadingMessage({ domain, needsMobile: false, needsApi: false });
   try { window.dispatchEvent(new CustomEvent('api-loading-started')); } catch {}
 
   const finishIfCurrent = () => {
@@ -668,6 +668,11 @@ async function loadApiDataInBackground(domainArg) {
       isInitial ||
       !!storedApiData.apiError ||
       (!storedApiData.apiDetails && !noApiFlag);
+
+    // Now that we know which sides we plan to fetch, update the banner precisely
+    try {
+      showGlobalLoadingMessage({ domain, needsMobile: needsMobileData, needsApi: needsApiData });
+    } catch {}
 
     // Build the two promises, skipping sides we don't need
     const mobilePromise = needsMobileData
@@ -830,22 +835,23 @@ async function loadApiDataInBackground(domainArg) {
       const mobilePresent = !!storedApiData.mobileDetails;
       const apiPresent    = !!storedApiData.apiDetails;
 
-      // What we actually did THIS run
-      const fetchedMobile = (typeof mobileSkipped === 'boolean') ? !mobileSkipped && mobileFulfilled : false;
-      const fetchedApi    = (typeof apiSkipped === 'boolean')    ? !apiSkipped    && apiFulfilled    : false;
+      // What we actually did THIS run (use planned fetch flags to avoid mislabeling)
+      const fetchedMobile = (typeof needsMobileData !== 'undefined') ? (needsMobileData && mobileFulfilled) : ((typeof mobileSkipped === 'boolean') ? (!mobileSkipped && mobileFulfilled) : false);
+      const fetchedApi    = (typeof needsApiData    !== 'undefined') ? (needsApiData    && apiFulfilled)    : ((typeof apiSkipped === 'boolean')    ? (!apiSkipped    && apiFulfilled)    : false);
 
       // Log a compact, explicit summary
       const availSummary   = `available → mobiles: ${mobilePresent ? 'yes' : 'no'}, api: ${apiPresent ? 'yes' : 'no'}`;
       const fetchedSummary = `fetched   → mobiles: ${fetchedMobile ? 'yes' : 'no (cached/skip)'}, api: ${fetchedApi ? 'yes' : 'no (cached/skip)'}`;
 
-      if (!mobilePresent && !apiPresent) {
-        console.log(`✅ Data Retrieval — none found for ${domain} | ${availSummary}; ${fetchedSummary}`);
-      } else if (mobilePresent && !apiPresent) {
-        console.log(`✅ Data Retrieval — mobiles only for ${domain} | ${availSummary}; ${fetchedSummary}`);
-      } else if (!mobilePresent && apiPresent) {
-        console.log(`✅ Data Retrieval — API only for ${domain} | ${availSummary}; ${fetchedSummary}`);
+      // Headline reflects what was actually fetched this run
+      if (!fetchedMobile && !fetchedApi) {
+        console.log(`✅ Data Retrieval — none fetched for ${domain} | ${availSummary}; ${fetchedSummary}`);
+      } else if (fetchedMobile && !fetchedApi) {
+        console.log(`✅ Data Retrieval — mobiles only fetched for ${domain} | ${availSummary}; ${fetchedSummary}`);
+      } else if (!fetchedMobile && fetchedApi) {
+        console.log(`✅ Data Retrieval — API only fetched for ${domain} | ${availSummary}; ${fetchedSummary}`);
       } else {
-        console.log(`✅ Data Retrieval — mobiles + API for ${domain} | ${availSummary}; ${fetchedSummary}`);
+        console.log(`✅ Data Retrieval — mobiles + API fetched for ${domain} | ${availSummary}; ${fetchedSummary}`);
       }
 
       return { status: 'ok' };
