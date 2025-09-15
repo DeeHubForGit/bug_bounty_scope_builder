@@ -205,7 +205,12 @@ async function makeApiRequest(endpoint, body, opts = {}) {
 }
 
 // Show the loading indicator near the nav buttons
-function showGlobalLoadingMessage(domainArg) {
+// Inline “Loading…” banner near the nav buttons.
+// Backward-compatible signature:
+//   showGlobalLoadingMessage(domainString)
+// New (optional) signature:
+//   showGlobalLoadingMessage({ domain, needsMobile: bool, needsApi: bool })
+function showGlobalLoadingMessage(domainOrOptions) {
   const el = document.getElementById('dataLoadingStatus');
   if (!el) return;
 
@@ -220,11 +225,36 @@ function showGlobalLoadingMessage(domainArg) {
     window.__apiLoadState.pinned = false;
   } catch {}
 
+  // ——— Parse args (backward compatible) ———
+  let domainArg = domainOrOptions;
+  let needsMobile = true;
+  let needsApi = true;
+
+  if (typeof domainOrOptions === 'object' && domainOrOptions !== null) {
+    domainArg   = domainOrOptions.domain;
+    // If flags are provided, use them; otherwise default to true to match old behavior
+    needsMobile = (typeof domainOrOptions.needsMobile === 'boolean') ? domainOrOptions.needsMobile : true;
+    needsApi    = (typeof domainOrOptions.needsApi    === 'boolean') ? domainOrOptions.needsApi    : true;
+  }
+
   const domain = normalizeDomain(
     domainArg || (localStorage.getItem('enteredUrl') || localStorage.getItem('autoModeDomain') || 'this site')
   );
+
+  // ——— Build precise message ———
+  // Grammar: "APIs" (no apostrophe); handle single vs combined text.
+  let what;
+  if (needsMobile && needsApi)      what = "mobiles and APIs";
+  else if (needsMobile)             what = "mobiles";
+  else if (needsApi)                what = "APIs";
+  else                              what = "data";
+
   el.classList.remove('hidden');
-  el.innerHTML = `<span class="inline-block animate-spin mr-1">↻</span> Attempting to retrieve mobiles and API's for <span class="font-mono">${escapeHtml(domain)}</span>`;
+  el.innerHTML = `
+    <span class="inline-block animate-spin mr-1">↻</span>
+    Attempting to retrieve ${what} for
+    <span class="font-mono">${escapeHtml(domain)}</span>
+  `;
 }
 
 // Hide the loading indicator
@@ -554,7 +584,7 @@ async function loadApiDataInBackground(domainArg) {
   // UI: loading
   setLoadingStateForInitialStep(true);
 
-// Update state to loading
+  // Update state to loading
   storedApiData.loading = true;
   storedApiData.isLoading = true;
   storedApiData.error = null;
@@ -567,7 +597,7 @@ async function loadApiDataInBackground(domainArg) {
 
   const finishIfCurrent = () => {
     if (mySeq === window.__apiLoadState.seq) {
-      hideGlobalLoadingMessage();
+        hideGlobalLoadingMessage();
       setLoadingStateForInitialStep(false);
       try { window.dispatchEvent(new CustomEvent('api-loading-finished')); } catch {}
     }
@@ -577,11 +607,11 @@ async function loadApiDataInBackground(domainArg) {
     console.log("Loading data in background for domain:", domain);
 
     // Check if we have cached data for this domain
-    const savedData = localStorage.getItem(`apiData_${domain}`);
+    const savedData    = localStorage.getItem(`apiData_${domain}`);
     const noMobileFlag = localStorage.getItem(`noMobileData_${domain}`) === '1';
-    const noApiFlag = localStorage.getItem(`noApiData_${domain}`) === '1';
-    let hasCompleteCache = true;
-    
+    const noApiFlag    = localStorage.getItem(`noApiData_${domain}`) === '1';
+    let hasCompleteCache = false; // compute after applying cache
+
     if (savedData) {
       try {
         const parsed = JSON.parse(savedData);
@@ -590,25 +620,26 @@ async function loadApiDataInBackground(domainArg) {
         // Only update if we don't already have the data or need to retry
         if (!storedApiData.mobileDetails && !noMobileFlag) {
           storedApiData.mobileDetails = parsed.mobileDetails || null;
-          hasCompleteCache = hasCompleteCache && !!storedApiData.mobileDetails;
         }
-        
         if (!storedApiData.apiDetails && !noApiFlag) {
           storedApiData.apiDetails = parsed.apiDetails ? normalizeApiDetails(parsed.apiDetails) : null;
-          hasCompleteCache = hasCompleteCache && !!storedApiData.apiDetails;
         }
-        
-        // Only update state if we actually used any cached data
-        if (storedApiData.mobileDetails || storedApiData.apiDetails) {
+
+        // Cache is complete only if BOTH objects exist
+        hasCompleteCache = !!storedApiData.mobileDetails && !!storedApiData.apiDetails;
+
+        // If fully satisfied by cache, we can clear the loading state now
+        if (hasCompleteCache) {
           storedApiData.loading = false;
           storedApiData.isLoading = false;
           storedApiData.error = null;
           storedApiData.mobileError = null;
           storedApiData.apiError = null;
-          
           finishIfCurrent();
-          try { window.dispatchEvent(new CustomEvent('api-data-updated')); } catch {}
         }
+
+        // Let UI reflect whatever we just loaded
+        try { window.dispatchEvent(new CustomEvent('api-data-updated')); } catch {}
       } catch (e) {
         console.warn('Error parsing cached data, will refetch', e);
         hasCompleteCache = false;
@@ -616,49 +647,80 @@ async function loadApiDataInBackground(domainArg) {
     } else {
       hasCompleteCache = false;
     }
-    
-    // If we have all the data we need from cache, don't fetch
-    if (hasCompleteCache || (storedApiData.mobileDetails && storedApiData.apiDetails)) {
+
+    // If we truly have both mobile + API from cache, don't fetch anything
+    if (hasCompleteCache) {
       return { status: 'cached' };
     }
 
-    // Fetch both in parallel with abort support
-    const [mobileRes, apiRes] = await Promise.allSettled([
-      fetchMobileAppDetailsForDomain(domain, { signal: mobileCtrl.signal }),
-      fetchApiDetails(domain, { signal: apiCtrl.signal })
-    ]);
+    // ─────────────────────────────────────────────────────────────
+    // Decide what to fetch (rule):
+    //  - initialDataRetrieval OR previous failure/missing -> fetch that side
+    // ─────────────────────────────────────────────────────────────
+    const isInitial = !savedData;
+
+    const needsMobileData =
+      isInitial ||
+      !!storedApiData.mobileError ||
+      (!storedApiData.mobileDetails && !noMobileFlag);
+
+    const needsApiData =
+      isInitial ||
+      !!storedApiData.apiError ||
+      (!storedApiData.apiDetails && !noApiFlag);
+
+    // Build the two promises, skipping sides we don't need
+    const mobilePromise = needsMobileData
+      ? fetchMobileAppDetailsForDomain(domain, { signal: mobileCtrl.signal })
+      : Promise.resolve({ __skipped: true });
+
+    const apiPromise = needsApiData
+      ? fetchApiDetails(domain, { signal: apiCtrl.signal })
+      : Promise.resolve({ __skipped: true });
+
+    // Fetch (or skip) with abort support
+    const [mobileRes, apiRes] = await Promise.allSettled([mobilePromise, apiPromise]);
 
     if (mySeq !== window.__apiLoadState.seq) return { status: 'stale' };
 
-    const mobileOk  = mobileRes.status === 'fulfilled' && mobileRes.value && !mobileRes.value.error;
-    const apiOk     = apiRes.status === 'fulfilled'    && apiRes.value    && !apiRes.value.error;
-    const mobileVal = mobileOk ? mobileRes.value : (mobileRes.status === 'fulfilled' ? mobileRes.value : null);
-    const apiValRaw = apiOk    ? apiRes.value    : (apiRes.status === 'fulfilled'    ? apiRes.value    : null);
+    // Normalize results so downstream logic can reason about them
+    const mobileSkipped  = mobileRes.status === 'fulfilled' && mobileRes.value && mobileRes.value.__skipped;
+    const apiSkipped     = apiRes.status    === 'fulfilled' && apiRes.value    && apiRes.value.__skipped;
+
+    const mobileFulfilled = mobileRes.status === 'fulfilled' && !mobileSkipped;
+    const apiFulfilled    = apiRes.status    === 'fulfilled' && !apiSkipped;
+
+    const mobileVal = mobileFulfilled ? mobileRes.value : null;
+    const apiValRaw = apiFulfilled    ? apiRes.value    : null;
     const apiVal    = apiValRaw ? normalizeApiDetails(apiValRaw) : apiValRaw;
+
+    // Slight readability tidy
+    const mobileOk = mobileSkipped || (mobileFulfilled && !mobileVal?.error);
+    const apiOk    = apiSkipped    || (apiFulfilled    && !apiValRaw?.error);
 
     const bothAborted =
       (mobileRes.status === 'rejected' && mobileRes.reason?.name === 'AbortError') &&
-      (apiRes.status === 'rejected'    && apiRes.reason?.name    === 'AbortError');
+      (apiRes.status    === 'rejected' && apiRes.reason?.name    === 'AbortError');
     if (bothAborted) return { status: 'aborted' };
 
+    // Distinguish between true error and valid "no data" response
     let mobileError =
-      (mobileRes.status === 'rejected' && mobileRes.reason?.name !== 'AbortError') ||
-      (mobileRes.status === 'fulfilled' && mobileVal && mobileVal.error);
-    // Distinguish between true error and valid "no data" response for API details
+      (!mobileSkipped) && (
+        (mobileRes.status === 'rejected' && mobileRes.reason?.name !== 'AbortError') ||
+        (mobileFulfilled && mobileVal && mobileVal.error)
+      );
+
     let apiError =
-      (apiRes.status === 'rejected' && apiRes.reason?.name !== 'AbortError') ||
-      (apiRes.status === 'fulfilled' && apiVal && apiVal.error);
-    const apiNoData = apiOk && isApiDetailsEmpty(apiVal);
-    // Only consider it a "no data" case if the request succeeded but returned no data
-    const mobileNoData = mobileOk && !mobileError && isMobileDetailsEmpty(mobileVal);
-    if (apiNoData) {
-      // Not an error; just no API endpoints/docs detected
-      apiError = false;
-    }
-    if (mobileNoData) {
-      // Not an error; just no mobile apps detected
-      mobileError = false;
-    }
+      (!apiSkipped) && (
+        (apiRes.status === 'rejected' && apiRes.reason?.name !== 'AbortError') ||
+        (apiFulfilled && apiValRaw && apiValRaw.error)
+      );
+
+    const mobileNoData = (!mobileSkipped) && mobileOk && mobileFulfilled && isMobileDetailsEmpty(mobileVal || {});
+    const apiNoData    = (!apiSkipped)    && apiOk    && apiFulfilled    && isApiDetailsEmpty(apiVal);
+
+    if (mobileNoData) mobileError = false;
+    if (apiNoData)    apiError    = false;
 
     const mobileReason = mobileError
       ? ((mobileRes.status === 'rejected' && mobileRes.reason?.message) ||
@@ -667,7 +729,7 @@ async function loadApiDataInBackground(domainArg) {
 
     const apiReason = apiError
       ? ((apiRes.status === 'rejected' && apiRes.reason?.message) ||
-         apiVal?.message || apiVal?.error || "Failed to fetch")
+         apiValRaw?.message || apiValRaw?.error || "Failed to fetch")
       : null;
 
     if (mobileError && apiError) {
@@ -693,42 +755,55 @@ async function loadApiDataInBackground(domainArg) {
     }
 
     // For mobile data, only update if we got new data or had an error
-    if (mobileOk && !mobileNoData) {
-      storedApiData.mobileDetails = mobileVal;
-      storedApiData.mobileError = null;
-      // Clear the no-data flag since we have valid data
-      try { localStorage.removeItem(`noMobileData_${domain}`); } catch {}
-    } else if (mobileError) {
-      // Only update error state if we don't have cached data
-      if (!storedApiData.mobileDetails) {
-        storedApiData.mobileDetails = null;
-        storedApiData.mobileError = mobileReason;
-      }
-    } else if (mobileNoData) {
-      // Only set no-data flag if we don't have cached data
-      if (!storedApiData.mobileDetails) {
-        storedApiData.mobileDetails = null;
-        try { localStorage.setItem(`noMobileData_${domain}`, '1'); } catch {}
+    if (!mobileSkipped) {
+      if (mobileOk && !mobileNoData) {
+        storedApiData.mobileDetails = mobileVal;
+        storedApiData.mobileError = null;
+        // Clear the no-data flag since we have valid data
+        try { localStorage.removeItem(`noMobileData_${domain}`); } catch {}
+        // Clear any persisted last error for Mobile
+        try { localStorage.removeItem(`mobileLastError_${domain}`); } catch {}
+      } else if (mobileError) {
+        // Only update error state if we don't have cached data
+        if (!storedApiData.mobileDetails) {
+          storedApiData.mobileDetails = null;
+          storedApiData.mobileError = mobileReason;
+        }
+        // Persist that Mobile retrieval failed (for retry on reload)
+        try { localStorage.setItem(`mobileLastError_${domain}`, '1'); } catch {}
+      } else if (mobileNoData) {
+        // Only set no-data flag if we don't have cached data
+        if (!storedApiData.mobileDetails) {
+          storedApiData.mobileDetails = null;
+          try { localStorage.setItem(`noMobileData_${domain}`, '1'); } catch {}
+        }
+        // No data is not an error → clear last error flag
+        try { localStorage.removeItem(`mobileLastError_${domain}`); } catch {}
       }
     }
 
     // For API data, only update if we got new data or had an error
-    if (apiOk && !apiNoData) {
-      storedApiData.apiDetails = apiVal;
-      storedApiData.apiError = null;
-      // Clear the no-data flag since we have valid data
-      try { localStorage.removeItem(`noApiData_${domain}`); } catch {}
-    } else if (apiError) {
-      // Only update error state if we don't have cached data
-      if (!storedApiData.apiDetails) {
-        storedApiData.apiDetails = null;
-        storedApiData.apiError = apiReason;
-      }
-    } else if (apiNoData) {
-      // Only set no-data flag if we don't have cached data
-      if (!storedApiData.apiDetails) {
-        storedApiData.apiDetails = null;
-        try { localStorage.setItem(`noApiData_${domain}`, '1'); } catch {}
+    if (!apiSkipped) {
+      if (apiOk && !apiNoData) {
+        storedApiData.apiDetails = apiVal;
+        storedApiData.apiError = null;
+        try { localStorage.removeItem(`noApiData_${domain}`); } catch {}
+        // Clear any persisted last error for API
+        try { localStorage.removeItem(`apiLastError_${domain}`); } catch {}
+      } else if (apiError) {
+        if (!storedApiData.apiDetails) {
+          storedApiData.apiDetails = null;
+          storedApiData.apiError = apiReason;
+        }
+        // Persist that API retrieval failed (for retry on reload)
+        try { localStorage.setItem(`apiLastError_${domain}`, '1'); } catch {}
+      } else if (apiNoData) {
+        if (!storedApiData.apiDetails) {
+          storedApiData.apiDetails = null;
+          try { localStorage.setItem(`noApiData_${domain}`, '1'); } catch {}
+        }
+        // No data is not an error → clear last error flag
+        try { localStorage.removeItem(`apiLastError_${domain}`); } catch {}
       }
     }
 
@@ -751,22 +826,33 @@ async function loadApiDataInBackground(domainArg) {
     finishIfCurrent();
 
     if (!mobileError && !apiError) {
+      // Availability AFTER this run
       const mobilePresent = !!storedApiData.mobileDetails;
-      const apiPresent =   !!storedApiData.apiDetails;
+      const apiPresent    = !!storedApiData.apiDetails;
+
+      // What we actually did THIS run
+      const fetchedMobile = (typeof mobileSkipped === 'boolean') ? !mobileSkipped && mobileFulfilled : false;
+      const fetchedApi    = (typeof apiSkipped === 'boolean')    ? !apiSkipped    && apiFulfilled    : false;
+
+      // Log a compact, explicit summary
+      const availSummary   = `available → mobiles: ${mobilePresent ? 'yes' : 'no'}, api: ${apiPresent ? 'yes' : 'no'}`;
+      const fetchedSummary = `fetched   → mobiles: ${fetchedMobile ? 'yes' : 'no (cached/skip)'}, api: ${fetchedApi ? 'yes' : 'no (cached/skip)'}`;
+
       if (!mobilePresent && !apiPresent) {
-        console.log(`✅ Data Retrieval — no mobiles or APIs found for ${domain}`);
-      } else if (!apiPresent && mobilePresent) {
-        console.log(`✅ Data Retrieval — no API endpoints/docs found for ${domain}`);
+        console.log(`✅ Data Retrieval — none found for ${domain} | ${availSummary}; ${fetchedSummary}`);
+      } else if (mobilePresent && !apiPresent) {
+        console.log(`✅ Data Retrieval — mobiles only for ${domain} | ${availSummary}; ${fetchedSummary}`);
       } else if (!mobilePresent && apiPresent) {
-        console.log(`✅ Data Retrieval — no mobile apps found for ${domain}`);
+        console.log(`✅ Data Retrieval — API only for ${domain} | ${availSummary}; ${fetchedSummary}`);
       } else {
-        console.log(`✅ Data Retrieval completed without error for ${domain}`);
+        console.log(`✅ Data Retrieval — mobiles + API for ${domain} | ${availSummary}; ${fetchedSummary}`);
       }
+
       return { status: 'ok' };
     } else {
       const parts = [];
       if (mobileError) parts.push(`Mobile: ${mobileReason}`);
-      if (apiError) parts.push(`API: ${apiReason}`);
+      if (apiError)    parts.push(`API: ${apiReason}`);
       const msg = parts.join('  ');
       console.warn(`⚠️ API data partially loaded for ${domain} — ${msg}`);
       showDataRetryButton({ domain, errorMsg: msg });
@@ -786,6 +872,12 @@ async function loadApiDataInBackground(domainArg) {
       details: "Please check that the API server is running and accessible.",
       timestamp: Date.now()
     };
+
+    // Persist last-error flags so reload can retry per your policy
+    try {
+      localStorage.setItem(`mobileLastError_${domain}`, '1');
+      localStorage.setItem(`apiLastError_${domain}`, '1');
+    } catch {}
 
     try { window.dispatchEvent(new CustomEvent('api-data-updated')); } catch {}
     showDataRetryButton({ domain, errorMsg: `${storedApiData.error.message} — ${storedApiData.error.details}` });

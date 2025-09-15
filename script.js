@@ -179,7 +179,7 @@ async function loadAndProcessApiData(domain) {
   let shouldRebuild = false;
   switch (result?.status) {
     case 'ok':
-      console.log("✅ Data Retrieval completed without error for", domain);
+      // console.log("✅ Data Retrieval completed without error for", domain);  Message already logged in api.js
       shouldRebuild = true;
       break;
     case 'partial':
@@ -606,16 +606,24 @@ async function fetchApiDataOnStartup() {
     console.log('Using cached data for domain:', domain);
   }
 
-  // 2) Determine if any fetch is needed
-  // Check if we have mobile data or if it previously failed
+  // 2) Determine if any fetch is needed (policy):
+  // Mobile: fetch if initial OR previous mobile error
+  // API:    fetch if initial OR previous API error
+  // We do NOT fetch solely due to missing data.
+
+  // Flags persisted by api.js on failures; cleared on success/no-data
+  const mobileLastError = localStorage.getItem(`mobileLastError_${domain}`) === '1';
+  const apiLastError    = localStorage.getItem(`apiLastError_${domain}`) === '1';
+
+  // Consider presence of any cached data to detect initial retrieval
+  const isInitialRetrieval = !hasCachedData;
+
+  // Respect no-data flags: if backend returned valid "no data", do not fetch
   const noMobileFlag = localStorage.getItem(`noMobileData_${domain}`) === '1';
-  const noApiFlag = localStorage.getItem(`noApiData_${domain}`) === '1';
-  
-  // If we have a mobile error in the stored data, we should retry
-  const hasMobileError = storedApiData.mobileError || (storedApiData.error && storedApiData.error.details?.includes('Mobile:'));
-  
-  const needsMobileData = (!storedApiData.mobileDetails || hasMobileError) && !noMobileFlag;
-  const needsApiData = !storedApiData.apiDetails && !noApiFlag;
+  const noApiFlag    = localStorage.getItem(`noApiData_${domain}`) === '1';
+
+  const needsMobileData = (isInitialRetrieval || mobileLastError) && !noMobileFlag;
+  const needsApiData    = (isInitialRetrieval || apiLastError)    && !noApiFlag;
   
   if (!(needsMobileData || needsApiData)) {
     // No need to fetch anything
@@ -646,6 +654,8 @@ async function fetchApiDataOnStartup() {
 
   // 4) Only preload if we actually need data and nothing is in-flight
   if (!storedApiData.loading && !storedApiData.isLoading) {
+    // Hint the banner about which sides we plan to fetch
+    try { window.showGlobalLoadingMessage && window.showGlobalLoadingMessage({ domain, needsMobile: needsMobileData, needsApi: needsApiData }); } catch {}
     loadAndProcessApiData(domain)
       .then((s) => console.log('🔄 Startup API preload status:', s))
       .catch(err => console.warn('Preload failed (non‑blocking):', err));
