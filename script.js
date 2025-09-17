@@ -285,9 +285,9 @@ async function handleDomainInput(rawInput) {
         lastCheckedDomain = domain;
         lastResolveVerdict = (resolvable === true) ? true : (resolvable === false ? false : null);
         if (resolvable === false) {
-          // Confirmed unresolvable -> show warning and BLOCK fetching
+          // Confirmed unresolvable -> show warning but ALLOW fetching
           maybeWarnIfUnresolvable(domain, { resolvable: false });
-          allowFetch = false;
+          allowFetch = true;
         } else if (resolvable === true) {
           allowFetch = true;
         } else {
