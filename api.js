@@ -247,8 +247,8 @@ function showGlobalLoadingMessage(domainOrOptions) {
   // ——— Build precise message ———
   // Grammar: "APIs" (no apostrophe); handle single vs combined text.
   let what;
-  if (needsMobile && needsApi)      what = "mobiles and APIs";
-  else if (needsMobile)             what = "mobiles";
+  if (needsMobile && needsApi)      what = "mobile apps and APIs";
+  else if (needsMobile)             what = "mobile apps";
   else if (needsApi)                what = "APIs";
   else                              what = "data";
 
