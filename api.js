@@ -522,6 +522,29 @@ function renderErrorMessage(errorObj) {
     ? new Date(errorObj.timestamp).toLocaleString() 
     : new Date().toLocaleString();
 
+  // Build details with separate lines for Mobile and API when applicable
+  const rawDetails = String(errorObj.details || '').trim();
+  let detailsHtml = '';
+  if (rawDetails.includes('Mobile:') || rawDetails.includes('API:')) {
+    // Support either "Mobile: ...\nAPI: ..." or a single line variants
+    const parts = rawDetails.split(/\n+/);
+    const mobileLine = parts.find(p => p.trim().toLowerCase().startsWith('mobile:')) || '';
+    const apiLine    = parts.find(p => p.trim().toLowerCase().startsWith('api:'))    || '';
+    if (mobileLine) {
+      const m = mobileLine.replace(/^\s*Mobile:\s*/i, '');
+      detailsHtml += `<div class="text-sm mt-1"><span class="font-semibold">Mobile:</span> ${escapeHtml(m)}</div>`;
+    }
+    if (apiLine) {
+      const a = apiLine.replace(/^\s*API:\s*/i, '');
+      detailsHtml += `<div class="text-sm mt-1"><span class="font-semibold">API:</span> ${escapeHtml(a)}</div>`;
+    }
+    if (!detailsHtml) {
+      detailsHtml = `<p class="text-sm mt-1">${escapeHtml(rawDetails)}</p>`;
+    }
+  } else {
+    detailsHtml = `<p class="text-sm mt-1">${escapeHtml(rawDetails || 'No detailed error information available')}</p>`;
+  }
+
   return `
     <div class="text-center py-6">
       <div class="bg-red-50 border-l-4 border-red-500 text-red-700 p-4 mb-4 text-left">
@@ -529,8 +552,8 @@ function renderErrorMessage(errorObj) {
           <span class="text-2xl mr-2">⚠️</span>
           <p class="font-bold text-xl">Program Data Error</p>
         </div>
-        <p class="font-medium">${errorObj.message || 'Failed to load data'}</p>
-        <p class="text-sm mt-1">${errorObj.details || 'No detailed error information available'}</p>
+        <p class="font-medium">${escapeHtml(errorObj.message || 'Failed to load data')}</p>
+        ${detailsHtml}
         <p class="text-xs text-gray-600 mt-1">Time: ${timestamp}</p>
       </div>
       <button id="retryApiButton" 
@@ -774,7 +797,7 @@ async function loadApiDataInBackground(domainArg) {
       storedApiData.isLoading = false;
       storedApiData.error = {
         message: `Error occurred retrieving mobile apps and API for ${domain}.`,
-        details: `Mobile: ${mobileReason}  API: ${apiReason}`,
+        details: `Mobile: ${mobileReason}\nAPI: ${apiReason}`,
         timestamp: Date.now()
       }
       try { window.dispatchEvent(new CustomEvent('api-data-updated')); } catch {}
