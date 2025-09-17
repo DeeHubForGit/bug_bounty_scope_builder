@@ -26,14 +26,11 @@ function initDataButton() {
   }
   
   // Remove any existing listeners
-  const newBtn = dataBtn.cloneNode(true);
-  dataBtn.parentNode.replaceChild(newBtn, dataBtn);
-  
-  // Enable button by default
-  newBtn.disabled = false;
+  const newDataBtn = dataBtn.cloneNode(true);
+  dataBtn.parentNode.replaceChild(newDataBtn, dataBtn);
   
   // Add click handler
-  newBtn.addEventListener('click', () => {
+  newDataBtn.addEventListener('click', () => {
     if (!storedApiData) {
       console.warn('No API data available');
       return;
@@ -47,7 +44,7 @@ function initDataButton() {
     }
   });
   
-  return newBtn;
+  return newDataBtn;
 }
 
 // Run this once the DOM is fully loaded

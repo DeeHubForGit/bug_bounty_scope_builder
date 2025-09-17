@@ -426,13 +426,27 @@ function showApiResultsPopup() {
     // Show error message if there was an error
     html = renderErrorMessage(storedApiData.error);
   } else if (!hasMobile && !hasApi) {
-    // No data case - show empty state
-    html = `
-      <div class="p-4 text-center">
-        <div class="text-gray-500 mb-2">No data available</div>
-        <p class="text-sm text-gray-600">Enter a valid URL to load data</p>
-      </div>
-    `;
+    // Check if user has entered a URL
+    const urlInput = document.getElementById('websiteUrl');
+    const inputValue = urlInput?.value.trim() || '';
+    const hasActualInput = inputValue && inputValue !== 'https://example.com';
+    
+    if (!hasActualInput) {
+      // No URL entered - show URL prompt
+      html = `
+        <div class="p-4 text-center">
+          <div class="text-gray-500 mb-2">Enter a valid URL to retrieve data</div>
+        </div>
+      `;
+    } else {
+      // URL entered but no data found
+      html = `
+        <div class="p-4 text-center">
+          <div class="text-gray-500 mb-2">No mobile apps or APIs found</div>
+          <p class="text-sm text-gray-600">You can still select a reward and generate the program</p>
+        </div>
+      `;
+    }
   } else {
     // We have some data to show
     const mobileHasData = hasMobile && !isMobileDetailsEmpty(storedApiData.mobileDetails);
