@@ -451,7 +451,6 @@ function displayScopePage(rewards, scopeText) {
   
     fileGroup.appendChild(btn);
     editor.dataset.copyButtonWired = '1';
-    console.log('[copy] Copy button wired');
   }
   
   export function showMessageModal(title, message) {
