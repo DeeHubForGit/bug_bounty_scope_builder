@@ -392,6 +392,13 @@ document.addEventListener("DOMContentLoaded", () => {
   websiteInput.addEventListener("blur", () => {
     const raw = websiteInput.value; // raw for validator
     if (!raw.trim()) { hideDomainValidationError(); return; }
+    
+    const domain = extractDomain(raw);
+    // Skip if domain hasn't changed
+    if (domain === lastProcessedValue) {
+      return;
+    }
+    
     console.log("🕒 Blur:", raw);
     handleDomainInput(raw);
   });
@@ -568,11 +575,14 @@ function loadDataFromLocalStorage() {
   storedApiData.loading = false;
   storedApiData.isLoading = false;
 
-  console.log('♻️ Loaded cached data', {
+  console.log('♻️ Using cached data', {
     domain: savedDomain,
     mobileDetails: !!storedApiData.mobileDetails,
     apiDetails: !!storedApiData.apiDetails
   });
+  
+  // Mark domain as processed to prevent redundant processing
+  lastProcessedValue = savedDomain;
   
   // Trigger UI update with cached data
   try { window.dispatchEvent(new CustomEvent('api-data-updated')); } catch {}
@@ -591,19 +601,17 @@ async function fetchApiDataOnStartup() {
 
   const domain = extractDomain(raw);
   
-  // Only validate URL if we don't have cached data.  If we have data then the URL should be valid.
+  // Check if we have cached data (after loadDataFromLocalStorage has run)
   const hasCachedData = storedApiData.apiDetails || storedApiData.mobileDetails;
   
   if (!hasCachedData) {
-    console.log('No cached data, validating domain:', domain);
+    // Only log and validate if we truly don't have cached data
     if (!isValidDomainOrUrl(domain)) {
       console.log('Invalid domain in fetchApiDataOnStartup, skipping fetch:', domain);
       showDomainValidationError();
       return;
     }
     hideDomainValidationError();
-  } else {
-    console.log('Using cached data for domain:', domain);
   }
 
   // 2) Determine if any fetch is needed (policy):
@@ -692,14 +700,21 @@ function setupUrlPersistence() {
     if (event) event.preventDefault();
     
     const value = urlInput.value.trim();
-    console.log('Saving URL:', value);
     
     if (value) {
       try {
         const domain = extractDomain(value);
+        
+        // Check if this domain was already saved to avoid all unnecessary processing
+        const currentSaved = localStorage.getItem('enteredUrl');
+        if (currentSaved === domain) {
+          // Domain hasn't changed, skip all processing
+          return;
+        }
+        
+        console.log('Saving URL:', value);
         console.log('Extracted domain:', domain);
         
-        // Always save the URL, even if invalid
         localStorage.setItem('enteredUrl', domain);
         console.log('Saved to localStorage');
         
