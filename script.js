@@ -920,11 +920,15 @@ function performReset() {
   // ─────────────────────────────────────────────────────────────
   const keysToRemove = [
     'enteredUrl',
+    'enteredUrlValid',
     'formState',
     'sectionSelections',
     'sectionCounts',
     'currentStepIndex',
     'selectedRewardTier',
+    'initialRewardTier',
+    'lastRenderedRewardTier',
+    'initialDomain',
     'partialScopeHTML',
     'finalScopeHTML'
   ];
@@ -958,6 +962,12 @@ function performReset() {
     if (typeof __didFetchApiDataOnStartup !== 'undefined') {
       __didFetchApiDataOnStartup = false;
     }
+  } catch (_) {}
+
+  // Also clear in-memory DNS resolve cache
+  try {
+    if (typeof lastCheckedDomain !== 'undefined') lastCheckedDomain = null;
+    if (typeof lastResolveVerdict !== 'undefined') lastResolveVerdict = null;
   } catch (_) {}
 
   // ─────────────────────────────────────────────────────────────
