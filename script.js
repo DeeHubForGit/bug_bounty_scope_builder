@@ -258,11 +258,13 @@ async function handleDomainInput(rawInput) {
 
   // ── FORMAT VALIDATION (no network) ──────────────────────────
   if (!isValidDomainOrUrl(domain)) {
+    try { localStorage.setItem('enteredUrlValid', '0'); } catch {}
     showDomainValidationError();
     document.getElementById('urlResolveWarn')?.remove();
     return;
   }
   hideDomainValidationError();
+  try { localStorage.setItem('enteredUrlValid', '1'); } catch {}
 
   // Persist normalised domain so other modules see the same value
   localStorage.setItem('enteredUrl', domain);
@@ -743,6 +745,10 @@ function setupUrlPersistence() {
     if (!isValidDomainOrUrl(extractDomain(savedUrl))) {
       console.log('Restored URL is invalid, showing error');
       showDomainValidationError();
+      try { localStorage.setItem('enteredUrlValid', '0'); } catch {}
+    }
+    else {
+      try { localStorage.setItem('enteredUrlValid', '1'); } catch {}
     }
   }
 
@@ -775,6 +781,7 @@ function handleLoadApiData() {
     showDomainValidationError();
     // Save the URL to localStorage to persist it
     localStorage.setItem('enteredUrl', domain);
+    try { localStorage.setItem('enteredUrlValid', '0'); } catch {}
     // Update the input field with the invalid URL
     if (urlInput) {
       urlInput.value = domain;
@@ -782,6 +789,7 @@ function handleLoadApiData() {
     return;
   }
   hideDomainValidationError();
+  try { localStorage.setItem('enteredUrlValid', '1'); } catch {}
 
   localStorage.setItem('enteredUrl', domain);
 

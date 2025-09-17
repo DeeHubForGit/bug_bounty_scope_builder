@@ -439,6 +439,18 @@ function showApiResultsPopup() {
         </div>
       `;
     } else {
+      // If a value is present, rely solely on the stored validity set by input validation logic
+      const storedValid = (localStorage.getItem('enteredUrlValid') || '').trim();
+      const invalid = (storedValid === '0');
+
+      if (invalid) {
+        html = `
+          <div class="p-4 text-center">
+            <div class="text-red-600 mb-2">Invalid URL</div>
+            <p class="text-sm text-gray-600">Please enter a valid domain or website URL (e.g. example.com or https://example.com)</p>
+          </div>
+        `;
+      } else {
       // URL entered but no data found
       html = `
         <div class="p-4 text-center">
@@ -446,6 +458,7 @@ function showApiResultsPopup() {
           <p class="text-sm text-gray-600">You can still select a reward and generate the program</p>
         </div>
       `;
+      }
     }
   } else {
     // We have some data to show
