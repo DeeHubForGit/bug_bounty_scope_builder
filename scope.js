@@ -350,9 +350,9 @@ function displayScopePage(rewards, scopeText) {
     return;
   }
 
-  // Keep tier tracking if used elsewhere, but we will always refresh rewards below
-  const selectedTier = localStorage.getItem('selectedRewardTier');
-  localStorage.setItem('initialRewardTier', selectedTier);
+  // Track reward tier changes to determine if Rewards block should be updated
+  const selectedTier = localStorage.getItem('selectedRewardTier') || '';
+  const lastRenderedTier = localStorage.getItem('lastRenderedRewardTier') || '';
   ensureCopyButtonOnce();
 
   // 1) Load existing scope (assets already injected)
@@ -371,14 +371,35 @@ function displayScopePage(rewards, scopeText) {
     return;
   }
 
-  // 2) Always inject or replace rewards with the latest block
-  const rewardsBlock = getRewardsTextForScope(rewards);
-  if (existing.includes('--START REWARDS--')) {
-    console.log('♻️ Refreshing rewards section.');
-    existing = existing.replace(/--START REWARDS--[\s\S]*?--END REWARDS--/i, rewardsBlock);
+  // 2) Rewards update policy:
+  //    - If no selection: always inject default block with placeholder ranges
+  //    - Else: update only when selection is new or changed
+  const hadTier = !!lastRenderedTier;
+  const hasTier = !!selectedTier;
+  const tierChanged = hadTier && hasTier && lastRenderedTier !== selectedTier;
+  const becameSelected = !hadTier && hasTier; // previously blank, now selected
+
+  if (!hasTier) {
+    // No rewards selected → ensure default rewards with placeholders are visible
+    const rewardsBlock = getRewardsTextForScope(rewards);
+    if (existing.includes('--START REWARDS--')) {
+      console.log('🧩 Injecting default rewards (no selection).');
+      existing = existing.replace(/--START REWARDS--[\s\S]*?--END REWARDS--/i, rewardsBlock);
+    } else {
+      console.log('➕ Adding default rewards section (no selection).');
+      existing += '\n' + rewardsBlock;
+    }
+  } else if (tierChanged || becameSelected) {
+    const rewardsBlock = getRewardsTextForScope(rewards);
+    if (existing.includes('--START REWARDS--')) {
+      console.log('♻️ Updating rewards section (tier change).');
+      existing = existing.replace(/--START REWARDS--[\s\S]*?--END REWARDS--/i, rewardsBlock);
+    } else {
+      console.log('➕ Adding rewards section (first selection).');
+      existing += '\n' + rewardsBlock;
+    }
   } else {
-    console.log('➕ Adding rewards section.');
-    existing += '\n' + rewardsBlock;
+    console.log('✅ Rewards not updated.');
   }
 
   // 3) Display final scope
@@ -387,6 +408,9 @@ function displayScopePage(rewards, scopeText) {
   finalInput.dispatchEvent(new Event('input', { bubbles: true }));
   finalEditor.editor.loadHTML(existing);
   setFinalScopeHTML(existing);
+
+  // Persist the last rendered tier for future change detection
+  localStorage.setItem('lastRenderedRewardTier', selectedTier);
 }
   
   /**
