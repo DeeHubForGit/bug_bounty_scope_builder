@@ -9,7 +9,10 @@ function getApiBaseUrl() {
 }
 
 // Live: http://207.246.87.60:5000  Local: http://localhost:5000
-const API_TIMEOUT = 60_000;
+function getApiTimeout() {
+  const cfg = (typeof window !== 'undefined' && window.config) ? window.config : null;
+  return cfg?.apiTimeoutMs || 60000; // Default to 60 seconds if not configured
+}
 
 // Shared fetch options
 const FETCH_OPTIONS = {
@@ -131,7 +134,7 @@ function normalizeDomain(input = '') {
  * POST request to baseURL + endpoint
  */
 async function makeApiRequest(endpoint, body, opts = {}) {
-  const { signal, validate, timeoutMs = API_TIMEOUT } = opts;
+  const { signal, validate, timeoutMs = getApiTimeout() } = opts;
   const url = `${getApiBaseUrl()}/${endpoint}`;
   console.log('→ Fetching', url, body);
 
@@ -192,7 +195,7 @@ async function makeApiRequest(endpoint, body, opts = {}) {
     return {
       error: true,
       message: isTimeout
-        ? `Request timed out after ${API_TIMEOUT / 1000} seconds`
+        ? `Request timed out after ${timeoutMs / 1000} seconds`
         : `Connection failed: ${e?.message || 'Network error'}`,
       details: isTimeout
         ? 'API server did not respond in time.'
