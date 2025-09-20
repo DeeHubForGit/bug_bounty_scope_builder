@@ -113,34 +113,66 @@ function getScopeTextFromJSON(scopeText) {
   }
   
   /**
-   * Helper: format the stored API data in the same format as manual mode
-   * "🧩API" HTML snippet
+   * Helper: format the stored API data in the ai_recommend_apis format
+   * "🧩 API" HTML snippet
    */
   function formatApiDataForSummary(apiData) {
     if (!apiData) return '';
     
-    // Check if there's any meaningful API data
-    const hasApiUrl = apiData.suggestedApi || (Array.isArray(apiData.apiUrls) && apiData.apiUrls.length > 0);
-    const hasDocUrl = Array.isArray(apiData.documentationUrls) && apiData.documentationUrls.length > 0;
+    const apiEntries = [];
     
-    // If no meaningful API data exists, return empty string to prevent showing just the heading
-    if (!hasApiUrl && !hasDocUrl) {
+    // Process suggested APIs
+    const suggestedApis = Array.isArray(apiData.suggestedApis) ? apiData.suggestedApis : [];
+    suggestedApis.forEach(api => {
+      const lines = ['🧩 API'];
+      lines.push(`<strong>URL:</strong> ${api.mainPage}`);
+      
+      if (Array.isArray(api.documentationUrls) && api.documentationUrls.length > 0) {
+        if (api.documentationUrls.length === 1) {
+          lines.push(`<strong>Documentation:</strong> ${api.documentationUrls[0]}`);
+        } else {
+          lines.push(`<strong>Documentation:</strong>`);
+          api.documentationUrls.forEach(docUrl => {
+            lines.push(docUrl);
+          });
+        }
+      }
+      
+      apiEntries.push(`<div class="mb-2">${lines.join('<br>')}</div>`);
+    });
+    
+    // Process alternative APIs only if suggestedApisOnly is false
+    const suggestedApisOnly = window.config?.suggestedApisOnly !== false;
+    if (!suggestedApisOnly) {
+      const alternativeApis = Array.isArray(apiData.alternativeApis) ? apiData.alternativeApis : [];
+      alternativeApis.forEach(api => {
+        const lines = ['🧩 API'];
+        lines.push(`<strong>URL:</strong> ${api.mainPage}`);
+        
+        if (Array.isArray(api.documentationUrls) && api.documentationUrls.length > 0) {
+          if (api.documentationUrls.length === 1) {
+            lines.push(`<strong>Documentation:</strong> ${api.documentationUrls[0]}`);
+          } else {
+            lines.push(`<strong>Documentation:</strong>`);
+            api.documentationUrls.forEach(docUrl => {
+              lines.push(docUrl);
+            });
+          }
+        }
+        
+        apiEntries.push(`<div class="mb-2">${lines.join('<br>')}</div>`);
+      });
+    }
+    
+    // If no API data exists, return empty string
+    if (apiEntries.length === 0) {
       return '';
     }
     
-    const lines = ['🧩API'];
-  
-    if (apiData.suggestedApi) {
-      lines.push(`<strong>URL:</strong> ${apiData.suggestedApi}`);
-    } else if (Array.isArray(apiData.apiUrls) && apiData.apiUrls.length) {
-      lines.push(`<strong>URL:</strong> ${apiData.apiUrls[0]}`);
-    }
-    
-    if (Array.isArray(apiData.documentationUrls) && apiData.documentationUrls.length) {
-      lines.push(`<strong>Documentation:</strong> ${apiData.documentationUrls[0]}`);
-    }
-  
-    return `<div class="mb-2">${lines.join('<br>')}</div>`;
+    // Use the same spacing approach as extractSectionHTML
+    return apiEntries
+      .map((entry, idx) => (idx > 0 ? '<div class="mb-2">&nbsp;</div>' + entry : entry))
+      .join('');
   }
   
 // Build the In-Scope Assets block for the Scope editor
