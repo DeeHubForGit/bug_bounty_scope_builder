@@ -66,29 +66,31 @@ function getJsonErrorMessage(json, fallback) {
 function normalizeApiDetails(json) {
   // Unwrap optional { result: {...} }
   const src = (json && typeof json.result === 'object') ? json.result : json;
-  const apiUrls = Array.isArray(src?.apiUrls)
-    ? src.apiUrls
-    : (Array.isArray(src?.api_urls) ? src.api_urls : []);
-  const documentationUrls = Array.isArray(src?.documentationUrls)
-    ? src.documentationUrls
-    : (Array.isArray(src?.documentation_urls) ? src.documentation_urls : []);
-  const suggestedApi = src?.suggestedApi || src?.suggested_api || null;
+  
+  // Handle ai_recommend_apis format only
+  const suggestedApis = Array.isArray(src?.suggestedApis) ? src.suggestedApis : [];
+  const alternativeApis = Array.isArray(src?.alternativeApis) ? src.alternativeApis : [];
+  const recommendation = src?.recommendation || '';
+  const apiSubdomains = Array.isArray(src?.apiSubdomains) ? src.apiSubdomains : [];
 
   // Preserve other fields, but ensure our canonical keys exist
   return {
     ...(src || {}),
-    apiUrls,
-    documentationUrls,
-    suggestedApi
+    suggestedApis,
+    alternativeApis,
+    recommendation,
+    apiSubdomains
   };
 }
 
 function isApiDetailsEmpty(json) {
   const norm = normalizeApiDetails(json);
-  const apiUrls   = Array.isArray(norm.apiUrls) ? norm.apiUrls : [];
-  const docs      = Array.isArray(norm.documentationUrls) ? norm.documentationUrls : [];
-  const suggested = norm?.suggestedApi;
-  return apiUrls.length === 0 && docs.length === 0 && !suggested;
+  
+  // Check ai_recommend_apis format only
+  const suggestedApis = Array.isArray(norm.suggestedApis) ? norm.suggestedApis : [];
+  const alternativeApis = Array.isArray(norm.alternativeApis) ? norm.alternativeApis : [];
+  
+  return suggestedApis.length === 0 && alternativeApis.length === 0;
 }
 
 // Consider mobile details "empty" if there are no suggested apps and no alternatives
@@ -583,11 +585,217 @@ function formatProgramDataContent(data) {
   }
 
   if (typeof data === 'object') {
+    // Check if this is the ai_recommend_apis format
+    if (data.suggestedApis || data.alternativeApis || data.recommendation || data.apiSubdomains) {
+      return formatApiRecommendationsForPopup(data);
+    }
+    
+    // Check if this is mobile app data format
+    if (data.suggested_apps || data.alternatives) {
+      return formatMobileAppsForPopup(data);
+    }
+    
     // Allow long lines/URLs to wrap instead of being visually cut off
     return `<pre class="bg-gray-50 p-2 rounded border text-sm" style="white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; overflow: auto;">${JSON.stringify(data, null, 2)}</pre>`;
   }
 
   return `<p>${data}</p>`;
+}
+
+function formatMobileAppsForPopup(data) {
+  let html = '';
+  
+  // Format suggested apps
+  if (Array.isArray(data.suggested_apps) && data.suggested_apps.length > 0) {
+    html += `<div class="mb-4">
+      <div class="font-semibold text-green-700 mb-2">✅ Suggested Mobile Apps</div>`;
+    
+    data.suggested_apps.forEach(app => {
+      html += `<div class="mb-3 p-3 bg-green-50 border border-green-200 rounded">
+        <div class="font-medium text-green-800">${escapeHtml(app.name || 'Mobile App')}</div>
+        <div class="text-sm mt-1">
+          <strong>Platform:</strong> ${escapeHtml(app.platform || 'Unknown')}
+        </div>`;
+      
+      if (app.url) {
+        html += `<div class="text-sm mt-1">
+          <strong>Store URL:</strong> <a href="${escapeHtml(app.url)}" target="_blank" class="text-blue-600 hover:underline">${escapeHtml(app.url)}</a>
+        </div>`;
+      }
+      
+      if (app.version) {
+        html += `<div class="text-sm mt-1">
+          <strong>Version:</strong> ${escapeHtml(app.version)}
+        </div>`;
+      }
+      
+      if (app.developer) {
+        html += `<div class="text-sm mt-1">
+          <strong>Developer:</strong> ${escapeHtml(app.developer)}
+        </div>`;
+      }
+      
+      html += `</div>`;
+    });
+    
+    html += `</div>`;
+  }
+  
+  // Format alternative apps
+  if (data.alternatives) {
+    // iOS alternatives
+    if (Array.isArray(data.alternatives.iOS) && data.alternatives.iOS.length > 0) {
+      html += `<div class="mb-4">
+        <div class="font-semibold text-blue-700 mb-2">🍎 iOS Alternative Apps</div>`;
+      
+      data.alternatives.iOS.forEach(app => {
+        html += `<div class="mb-3 p-3 bg-blue-50 border border-blue-200 rounded">
+          <div class="font-medium text-blue-800">${escapeHtml(app.name || 'iOS App')}</div>
+          <div class="text-sm mt-1">
+            <strong>Platform:</strong> iOS
+          </div>`;
+        
+        if (app.url) {
+          html += `<div class="text-sm mt-1">
+            <strong>App Store URL:</strong> <a href="${escapeHtml(app.url)}" target="_blank" class="text-blue-600 hover:underline">${escapeHtml(app.url)}</a>
+          </div>`;
+        }
+        
+        if (app.version) {
+          html += `<div class="text-sm mt-1">
+            <strong>Version:</strong> ${escapeHtml(app.version)}
+          </div>`;
+        }
+        
+        if (app.developer) {
+          html += `<div class="text-sm mt-1">
+            <strong>Developer:</strong> ${escapeHtml(app.developer)}
+          </div>`;
+        }
+        
+        html += `</div>`;
+      });
+      
+      html += `</div>`;
+    }
+    
+    // Android alternatives
+    if (Array.isArray(data.alternatives.Android) && data.alternatives.Android.length > 0) {
+      html += `<div class="mb-4">
+        <div class="font-semibold text-green-700 mb-2">🤖 Android Alternative Apps</div>`;
+      
+      data.alternatives.Android.forEach(app => {
+        html += `<div class="mb-3 p-3 bg-green-50 border border-green-200 rounded">
+          <div class="font-medium text-green-800">${escapeHtml(app.name || 'Android App')}</div>
+          <div class="text-sm mt-1">
+            <strong>Platform:</strong> Android
+          </div>`;
+        
+        if (app.url) {
+          html += `<div class="text-sm mt-1">
+            <strong>Play Store URL:</strong> <a href="${escapeHtml(app.url)}" target="_blank" class="text-blue-600 hover:underline">${escapeHtml(app.url)}</a>
+          </div>`;
+        }
+        
+        if (app.version) {
+          html += `<div class="text-sm mt-1">
+            <strong>Version:</strong> ${escapeHtml(app.version)}
+          </div>`;
+        }
+        
+        if (app.developer) {
+          html += `<div class="text-sm mt-1">
+            <strong>Developer:</strong> ${escapeHtml(app.developer)}
+          </div>`;
+        }
+        
+        html += `</div>`;
+      });
+      
+      html += `</div>`;
+    }
+  }
+  
+  return html || '<div class="text-gray-500">No mobile apps available</div>';
+}
+
+function formatApiRecommendationsForPopup(data) {
+  let html = '';
+  
+  // Show recommendation text if available
+  if (data.recommendation) {
+    html += `<div class="mb-4 p-3 bg-blue-50 border-l-4 border-blue-400 text-blue-800">
+      <div class="font-semibold mb-1">💡 Recommendation</div>
+      <div class="text-sm">${escapeHtml(data.recommendation)}</div>
+    </div>`;
+  }
+  
+  // Format suggested APIs
+  if (Array.isArray(data.suggestedApis) && data.suggestedApis.length > 0) {
+    html += `<div class="mb-4">
+      <div class="font-semibold text-green-700 mb-2">✅ Suggested APIs</div>`;
+    
+    data.suggestedApis.forEach(api => {
+      html += `<div class="mb-3 p-3 bg-green-50 border border-green-200 rounded">
+        <div class="font-medium text-green-800">${escapeHtml(api.name || 'API')}</div>
+        <div class="text-sm mt-1">
+          <strong>URL:</strong> <a href="${escapeHtml(api.mainPage)}" target="_blank" class="text-blue-600 hover:underline">${escapeHtml(api.mainPage)}</a>
+        </div>`;
+      
+      if (Array.isArray(api.documentationUrls) && api.documentationUrls.length > 0) {
+        html += `<div class="text-sm mt-1">
+          <strong>Documentation:</strong><br>`;
+        api.documentationUrls.forEach(docUrl => {
+          html += `<a href="${escapeHtml(docUrl)}" target="_blank" class="text-blue-600 hover:underline block ml-2">${escapeHtml(docUrl)}</a>`;
+        });
+        html += `</div>`;
+      }
+      
+      html += `</div>`;
+    });
+    
+    html += `</div>`;
+  }
+  
+  // Format alternative APIs
+  if (Array.isArray(data.alternativeApis) && data.alternativeApis.length > 0) {
+    html += `<div class="mb-4">
+      <div class="font-semibold text-blue-700 mb-2">🔄 Alternative APIs</div>`;
+    
+    data.alternativeApis.forEach(api => {
+      html += `<div class="mb-3 p-3 bg-blue-50 border border-blue-200 rounded">
+        <div class="font-medium text-blue-800">${escapeHtml(api.name || 'API')}</div>
+        <div class="text-sm mt-1">
+          <strong>URL:</strong> <a href="${escapeHtml(api.mainPage)}" target="_blank" class="text-blue-600 hover:underline">${escapeHtml(api.mainPage)}</a>
+        </div>`;
+      
+      if (Array.isArray(api.documentationUrls) && api.documentationUrls.length > 0) {
+        html += `<div class="text-sm mt-1">
+          <strong>Documentation:</strong><br>`;
+        api.documentationUrls.forEach(docUrl => {
+          html += `<a href="${escapeHtml(docUrl)}" target="_blank" class="text-blue-600 hover:underline block ml-2">${escapeHtml(docUrl)}</a>`;
+        });
+        html += `</div>`;
+      }
+      
+      html += `</div>`;
+    });
+    
+    html += `</div>`;
+  }
+
+  // Show API subdomains if available
+  if (Array.isArray(data.apiSubdomains) && data.apiSubdomains.length > 0) {
+    html += `<div class="mb-4">
+      <div class="font-semibold text-gray-700 mb-2">🌐 Related API Subdomains</div>
+      <div class="text-sm bg-gray-50 p-2 rounded border">`;
+    data.apiSubdomains.forEach(subdomain => {
+      html += `<div class="font-mono text-xs">${escapeHtml(subdomain)}</div>`;
+    });
+    html += `</div></div>`;
+  }
+  
+  return html || '<div class="text-gray-500">No API recommendations available</div>';
 }
 
 function renderNoDataMessage() {
@@ -1013,7 +1221,7 @@ export async function fetchMobileAppDetailsForDomain(
 export async function fetchApiDetails(domain, opts = {}) {
   if (opts && typeof opts !== 'object') opts = {};
   return makeApiRequest(
-    "api-details",
+    "api-recommendation-ai",
     { domain: normalizeDomain(domain) },
     { signal: opts.signal, validate: validateApiDetailsPayload }
   );
