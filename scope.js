@@ -54,9 +54,8 @@ function getScopeTextFromJSON(scopeText) {
       const iosApp = mobileDetails.suggested_apps.find(app => app.platform === 'iOS');
       if (iosApp) {
         hasIOS = true;
-        const lines = ['📱MOBILE APP'];
-        lines.push(`<strong>App Name:</strong> ${appName}`);
-        lines.push(`<strong>Platform:</strong> Apple: ${iosApp.url}`);
+        const lines = [`📱MOBILE APP: <strong>${appName} (Apple)</strong>`];
+        lines.push(`<strong>URL:</strong> ${iosApp.url}`);
         lines.push(`<strong>Version:</strong> Current`);
         appEntries.push(`<div class="mb-2">${lines.join('<br>')}</div>`);
       }
@@ -65,17 +64,15 @@ function getScopeTextFromJSON(scopeText) {
       const androidApp = mobileDetails.suggested_apps.find(app => app.platform === 'Android');
       if (androidApp) {
         hasAndroid = true;
-        const lines = ['📱MOBILE APP'];
-        lines.push(`<strong>App Name:</strong> ${appName}`);
-        lines.push(`<strong>Platform:</strong> Android: ${androidApp.url}`);
+        const lines = [`📱MOBILE APP: <strong>${appName} (Android)</strong>`];
+        lines.push(`<strong>URL:</strong> ${androidApp.url}`);
         lines.push(`<strong>Version:</strong> Current`);
         appEntries.push(`<div class="mb-2">${lines.join('<br>')}</div>`);
       }
       
       // If no platforms were found, create a generic entry
       if (!hasIOS && !hasAndroid && mobileDetails.suggested_apps.length > 0) {
-        const lines = ['📱MOBILE APP'];
-        lines.push(`<strong>App Name:</strong> ${appName}`);
+        const lines = [`📱MOBILE APP: <strong>${appName}</strong>`];
         lines.push(`<strong>Version:</strong> Current`);
         appEntries.push(`<div class="mb-2">${lines.join('<br>')}</div>`);
       }
@@ -86,9 +83,8 @@ function getScopeTextFromJSON(scopeText) {
       // Process iOS alternatives
       if (Array.isArray(mobileDetails.alternatives.iOS)) {
         mobileDetails.alternatives.iOS.forEach(app => {
-          const lines = ['📱MOBILE APP'];
-          lines.push(`<strong>App Name:</strong> ${app.name}`);
-          lines.push(`<strong>Platform:</strong> Apple: ${app.url}`);
+          const lines = [`📱MOBILE APP: <strong>${app.name} (Apple)</strong>`];
+          lines.push(`<strong>URL:</strong> ${app.url}`);
           lines.push(`<strong>Version:</strong> Current`);
           appEntries.push(`<div class="mb-2">${lines.join('<br>')}</div>`);
         });
@@ -97,9 +93,8 @@ function getScopeTextFromJSON(scopeText) {
       // Process Android alternatives
       if (Array.isArray(mobileDetails.alternatives.Android)) {
         mobileDetails.alternatives.Android.forEach(app => {
-          const lines = ['📱MOBILE APP'];
-          lines.push(`<strong>App Name:</strong> ${app.name}`);
-          lines.push(`<strong>Platform:</strong> Android: ${app.url}`);
+          const lines = [`📱MOBILE APP: <strong>${app.name} (Android)</strong>`];
+          lines.push(`<strong>URL:</strong> ${app.url}`);
           lines.push(`<strong>Version:</strong> Current`);
           appEntries.push(`<div class="mb-2">${lines.join('<br>')}</div>`);
         });
@@ -124,7 +119,7 @@ function getScopeTextFromJSON(scopeText) {
     // Process suggested APIs
     const suggestedApis = Array.isArray(apiData.suggestedApis) ? apiData.suggestedApis : [];
     suggestedApis.forEach(api => {
-      const lines = ['🧩 API'];
+      const lines = [`🧩 API: <strong>${api.name || 'Unknown API'}</strong>`];
       lines.push(`<strong>URL:</strong> ${api.mainPage}`);
       
       if (Array.isArray(api.documentationUrls) && api.documentationUrls.length > 0) {
@@ -146,7 +141,7 @@ function getScopeTextFromJSON(scopeText) {
     if (!suggestedApisOnly) {
       const alternativeApis = Array.isArray(apiData.alternativeApis) ? apiData.alternativeApis : [];
       alternativeApis.forEach(api => {
-        const lines = ['🧩 API'];
+        const lines = [`🧩 API: <strong>${api.name || 'Unknown API'}</strong>`];
         lines.push(`<strong>URL:</strong> ${api.mainPage}`);
         
         if (Array.isArray(api.documentationUrls) && api.documentationUrls.length > 0) {
