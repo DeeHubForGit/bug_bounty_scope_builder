@@ -35,72 +35,57 @@ function getScopeTextFromJSON(scopeText) {
   }
   
   /**
+   * Helper: Collect all mobile apps to render based on config
+   */
+  function getMobileAppsToRender(mobileDetails, config) {
+    if (!mobileDetails) return [];
+
+    const apps = [];
+    const suggestedOnly = !!(config && config.suggestedAppsOnly);
+
+    // Add main suggested apps
+    if (Array.isArray(mobileDetails.suggested_apps) && mobileDetails.suggested_apps.length > 0) {
+      const suggestedName = mobileDetails.suggested_name || mobileDetails.suggested_apps[0].name;
+      
+      // Add iOS and Android suggested apps with the suggested name
+      mobileDetails.suggested_apps.forEach(app => {
+        apps.push({ ...app, name: suggestedName });
+      });
+    }
+
+    // Add alternatives if config allows
+    if (!suggestedOnly && mobileDetails.alternatives) {
+      if (Array.isArray(mobileDetails.alternatives.iOS)) {
+        apps.push(...mobileDetails.alternatives.iOS);
+      }
+      if (Array.isArray(mobileDetails.alternatives.Android)) {
+        apps.push(...mobileDetails.alternatives.Android);
+      }
+    }
+
+    return apps;
+  }
+
+  /**
    * Helper: Format mobile app data in the same format as manual mode
    */
   function formatMobileDataForSummary(mobileDetails) {
-    if (!mobileDetails) return '';
-    
-    // Array to collect all mobile app entries
-    const appEntries = [];
-    const suggestedOnly = !!(window.config && window.config.suggestedAppsOnly);
-    
-    // Process main app - use suggested app(s) if available
-    if (Array.isArray(mobileDetails.suggested_apps) && mobileDetails.suggested_apps.length > 0) {
-      const appName = mobileDetails.suggested_name || mobileDetails.suggested_apps[0].name;
-      let hasIOS = false;
-      let hasAndroid = false;
+    const apps = getMobileAppsToRender(mobileDetails, window.config);
+    if (!Array.isArray(apps) || apps.length === 0) return '';
+
+    const appEntries = apps.map(app => {
+      const appName = app.name || 'Unknown App';
+      const platformLabel = app.platform === 'iOS' ? 'Apple' : app.platform === 'Android' ? 'Android' : '';
+      const lines = [`📱MOBILE APP: <strong>${appName}${platformLabel ? ` (${platformLabel})` : ''}</strong>`];
       
-      // Process iOS platform
-      const iosApp = mobileDetails.suggested_apps.find(app => app.platform === 'iOS');
-      if (iosApp) {
-        hasIOS = true;
-        const lines = [`📱MOBILE APP: <strong>${appName} (Apple)</strong>`];
-        lines.push(`<strong>URL:</strong> ${iosApp.url}`);
-        lines.push(`<strong>Version:</strong> Current`);
-        appEntries.push(`<div class="mb-2">${lines.join('<br>')}</div>`);
+      if (app.url) {
+        lines.push(`<strong>URL:</strong> ${app.url}`);
       }
+      lines.push(`<strong>Version:</strong> Current`);
       
-      // Process Android platform
-      const androidApp = mobileDetails.suggested_apps.find(app => app.platform === 'Android');
-      if (androidApp) {
-        hasAndroid = true;
-        const lines = [`📱MOBILE APP: <strong>${appName} (Android)</strong>`];
-        lines.push(`<strong>URL:</strong> ${androidApp.url}`);
-        lines.push(`<strong>Version:</strong> Current`);
-        appEntries.push(`<div class="mb-2">${lines.join('<br>')}</div>`);
-      }
-      
-      // If no platforms were found, create a generic entry
-      if (!hasIOS && !hasAndroid && mobileDetails.suggested_apps.length > 0) {
-        const lines = [`📱MOBILE APP: <strong>${appName}</strong>`];
-        lines.push(`<strong>Version:</strong> Current`);
-        appEntries.push(`<div class="mb-2">${lines.join('<br>')}</div>`);
-      }
-    }
-    
-    // Process alternative apps (only when not limited to suggested apps)
-    if (!suggestedOnly && mobileDetails.alternatives) {
-      // Process iOS alternatives
-      if (Array.isArray(mobileDetails.alternatives.iOS)) {
-        mobileDetails.alternatives.iOS.forEach(app => {
-          const lines = [`📱MOBILE APP: <strong>${app.name} (Apple)</strong>`];
-          lines.push(`<strong>URL:</strong> ${app.url}`);
-          lines.push(`<strong>Version:</strong> Current`);
-          appEntries.push(`<div class="mb-2">${lines.join('<br>')}</div>`);
-        });
-      }
-      
-      // Process Android alternatives
-      if (Array.isArray(mobileDetails.alternatives.Android)) {
-        mobileDetails.alternatives.Android.forEach(app => {
-          const lines = [`📱MOBILE APP: <strong>${app.name} (Android)</strong>`];
-          lines.push(`<strong>URL:</strong> ${app.url}`);
-          lines.push(`<strong>Version:</strong> Current`);
-          appEntries.push(`<div class="mb-2">${lines.join('<br>')}</div>`);
-        });
-      }
-    }
-    
+      return `<div class="mb-2">${lines.join('<br>')}</div>`;
+    });
+
     // Use the same spacing approach as extractSectionHTML
     return appEntries
       .map((entry, idx) => (idx > 0 ? '<div class="mb-2">&nbsp;</div>' + entry : entry))
