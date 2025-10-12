@@ -131,7 +131,7 @@ document.getElementById('websiteUrl')?.addEventListener('input', () => {
 function setLoadingStateForFinalStep(isLoading) {
   const finalEditor = document.getElementById('finalSummaryContent');
   const generateBtn = document.getElementById('generateProgramButton');
-  const viewDataBtn = document.getElementById('viewApiButton');
+  const viewDataBtn = document.getElementById('viewDataButton');
   // Support both ids in case the template uses "cancelButton" instead of "backButton"
   const backOrCancelBtn = document.getElementById('backButton') || document.getElementById('cancelButton');
 
