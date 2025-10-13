@@ -174,7 +174,7 @@ function goToBuilder() {
     const editor = document.querySelector("trix-editor#finalSummaryContent");
     if (editor) {
       const scopeHTML = editor.innerHTML;
-      localStorage.setItem("finalScopeHTML", scopeHTML);
+      localStorage.setItem("scopeHTML", scopeHTML);
     }
   }
 

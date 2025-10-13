@@ -845,7 +845,7 @@ function displayScope() {
    ================================ */
 
 // Get the current scope HTML from the final Trix editor
-function getFinalScopeHTMLFromEditor() {
+function getScopeHTMLFromEditor() {
   const el = document.getElementById('finalSummaryContent');
   if (!el) return null;
   const html = (el.innerHTML || '').trim();
@@ -853,16 +853,16 @@ function getFinalScopeHTMLFromEditor() {
 }
 
 // Persist the current final scope HTML if present
-function persistFinalScopeHTML() {
+function persistScopeHTML() {
   try {
-    const html = getFinalScopeHTMLFromEditor();
+    const html = getScopeHTMLFromEditor();
     if (html) {
-      localStorage.setItem('finalScopeHTML', html);
+      localStorage.setItem('scopeHTML', html);
       // Optional mirror to in‑memory store
       if (window.storedApiData) {
-        window.storedApiData.finalScopeHTML = html;
+        window.storedApiData.scopeHTML = html;
       }
-      // console.log('[autosave] finalScopeHTML saved');
+      // console.log('[autosave] scopeHTML saved');
     }
   } catch (e) {
     console.warn('[autosave] persist failed:', e);
@@ -872,20 +872,20 @@ function persistFinalScopeHTML() {
 // Wire up autosave on page close, tab hide, and editor changes
 function setupScopeAutosave() {
   // Save when navigating away or closing
-  window.addEventListener('beforeunload', persistFinalScopeHTML);
-  window.addEventListener('pagehide', persistFinalScopeHTML);
+  window.addEventListener('beforeunload', persistScopeHTML);
+  window.addEventListener('pagehide', persistScopeHTML);
 
   // Save when page becomes hidden
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') {
-      persistFinalScopeHTML();
+      persistScopeHTML();
     }
   });
 
   // Save on any change in the final Trix editor
   document.addEventListener('trix-change', (e) => {
     if (e.target && e.target.id === 'finalSummaryContent') {
-      persistFinalScopeHTML();
+      persistScopeHTML();
     }
   });
 }
@@ -929,8 +929,7 @@ function performReset() {
     'initialRewardTier',
     'lastRenderedRewardTier',
     'initialDomain',
-    'partialScopeHTML',
-    'finalScopeHTML'
+    'scopeHTML'
   ];
   keysToRemove.forEach(k => localStorage.removeItem(k));
 
@@ -947,8 +946,7 @@ function performReset() {
       storedApiData.mobileDetails = null;
       storedApiData.apiDetails = null;
       storedApiData.scopeText = null;          // if populated by API
-      storedApiData.partialScopeHTML = null;   // cached HTML (assets-injected)
-      storedApiData.finalScopeHTML = null;     // final cached HTML
+      storedApiData.scopeHTML = null;   // cached HTML (assets-injected)
       storedApiData.mobileError = null;
       storedApiData.apiError = null;
       storedApiData.error = null;
