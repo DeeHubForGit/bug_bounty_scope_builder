@@ -113,7 +113,7 @@ document.addEventListener('DOMContentLoaded', () => {
       });
       // --- END NEW ---
 
-      // D) Set up autosave so scope is saved when the form is closed
+      // Set up autosave so scope is saved when the form is closed
       setupScopeAutosave();
     })
     .catch(error => {
@@ -402,11 +402,6 @@ document.addEventListener("DOMContentLoaded", () => {
     handleDomainInput(raw);
   });
 });
-
-function setUrlEventsMessage(message) {
-  const messageEl = document.getElementById("urlEventsMessage");
-  messageEl.textContent = message || ""; // Clear if empty
-}
 
 /**
  * Load config, scope text, and rewards from separate JSON files

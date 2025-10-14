@@ -3,6 +3,6 @@
     "showApiDataButton": true,
     "apiBasePath": "http://127.0.0.1:5000",
     "suggestedAppsOnly": true,
-    "suggestedApisOnly": false,
+    "suggestedApisOnly": true,
     "apiTimeoutMs": 60000
 }

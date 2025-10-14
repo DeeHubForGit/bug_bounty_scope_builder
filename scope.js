@@ -2,69 +2,69 @@ import { getRewardsTextForScope } from './rewards.js';
 
 function getScopeTextFromJSON(scopeText) {
 
-    if (!Array.isArray(scopeText)) {
-        console.error('❌ scopeText is not loaded or not an array');
-        return '';
-    }
-  
-    let html = '';
-  
-    scopeText.forEach(block => {
-        if (block.type === 'paragraph') {
-            html += `<p>${block.text}</p>`;
-        } else if (block.type === 'list' && Array.isArray(block.items)) {
-            html += '<ul>';
-            block.items.forEach(item => {
-                html += `<li>${item}</li>`;
-            });
-            html += '</ul>';
-        }
+  if (!Array.isArray(scopeText)) {
+      console.error('❌ scopeText is not loaded or not an array');
+      return '';
+  }
+
+  let html = '';
+
+  scopeText.forEach(block => {
+      if (block.type === 'paragraph') {
+          html += `<p>${block.text}</p>`;
+      } else if (block.type === 'list' && Array.isArray(block.items)) {
+          html += '<ul>';
+          block.items.forEach(item => {
+              html += `<li>${item}</li>`;
+          });
+          html += '</ul>';
+      }
+  });
+
+  return html.trim();
+}
+
+/**
+ * Helper: Format the website URL in the same format as manual mode
+ */
+function formatWebsiteDataForSummary(domain) {
+  if (!domain) return '';
+  const lines = ['🌐 WEBSITE'];
+  lines.push(`<strong>URL:</strong> ${domain}`);
+  return `<div class="mb-2">${lines.join('<br>')}</div>`;
+}
+
+/**
+ * Helper: Collect all mobile apps to render based on config
+ */
+function getMobileAppsToRender(mobileDetails, config) {
+  if (!mobileDetails) return [];
+
+  const apps = [];
+  const suggestedOnly = !!(config && config.suggestedAppsOnly);
+
+  // Add main suggested apps
+  if (Array.isArray(mobileDetails.suggested_apps) && mobileDetails.suggested_apps.length > 0) {
+    const suggestedName = mobileDetails.suggested_name || mobileDetails.suggested_apps[0].name;
+    
+    // Add iOS and Android suggested apps with the suggested name
+    mobileDetails.suggested_apps.forEach(app => {
+      apps.push({ ...app, name: suggestedName });
     });
-  
-    return html.trim();
   }
-  
-  /**
-   * Helper: Format the website URL in the same format as manual mode
-   */
-  function formatWebsiteDataForSummary(domain) {
-    if (!domain) return '';
-    const lines = ['🌐 WEBSITE'];
-    lines.push(`<strong>URL:</strong> ${domain}`);
-    return `<div class="mb-2">${lines.join('<br>')}</div>`;
-  }
-  
-  /**
-   * Helper: Collect all mobile apps to render based on config
-   */
-  function getMobileAppsToRender(mobileDetails, config) {
-    if (!mobileDetails) return [];
 
-    const apps = [];
-    const suggestedOnly = !!(config && config.suggestedAppsOnly);
-
-    // Add main suggested apps
-    if (Array.isArray(mobileDetails.suggested_apps) && mobileDetails.suggested_apps.length > 0) {
-      const suggestedName = mobileDetails.suggested_name || mobileDetails.suggested_apps[0].name;
-      
-      // Add iOS and Android suggested apps with the suggested name
-      mobileDetails.suggested_apps.forEach(app => {
-        apps.push({ ...app, name: suggestedName });
-      });
+  // Add alternatives if config allows
+  if (!suggestedOnly && mobileDetails.alternatives) {
+    if (Array.isArray(mobileDetails.alternatives.iOS)) {
+      apps.push(...mobileDetails.alternatives.iOS);
     }
-
-    // Add alternatives if config allows
-    if (!suggestedOnly && mobileDetails.alternatives) {
-      if (Array.isArray(mobileDetails.alternatives.iOS)) {
-        apps.push(...mobileDetails.alternatives.iOS);
-      }
-      if (Array.isArray(mobileDetails.alternatives.Android)) {
-        apps.push(...mobileDetails.alternatives.Android);
-      }
+    if (Array.isArray(mobileDetails.alternatives.Android)) {
+      apps.push(...mobileDetails.alternatives.Android);
     }
-
-    return apps;
   }
+
+  return apps;
+}
 
   /**
    * Helper: Format mobile app data in the same format as manual mode
@@ -91,70 +91,53 @@ function getScopeTextFromJSON(scopeText) {
       .map((entry, idx) => (idx > 0 ? '<div class="mb-2">&nbsp;</div>' + entry : entry))
       .join('');
   }
-  
-  /**
-   * Helper: format the stored API data in the ai_recommend_apis format
-   * "🧩 API" HTML snippet
-   */
-  function formatApiDataForSummary(apiData) {
-    if (!apiData) return '';
-    
-    const apiEntries = [];
-    
-    // Process suggested APIs
-    const suggestedApis = Array.isArray(apiData.suggestedApis) ? apiData.suggestedApis : [];
-    suggestedApis.forEach(api => {
-      const lines = [`🧩 API: <strong>${api.name || 'Unknown API'}</strong>`];
-      lines.push(`<strong>URL:</strong> ${api.mainPage}`);
-      
-      if (Array.isArray(api.documentationUrls) && api.documentationUrls.length > 0) {
-        if (api.documentationUrls.length === 1) {
-          lines.push(`<strong>Documentation:</strong> ${api.documentationUrls[0]}`);
-        } else {
-          lines.push(`<strong>Documentation:</strong>`);
-          api.documentationUrls.forEach(docUrl => {
-            lines.push(docUrl);
-          });
-        }
-      }
-      
-      apiEntries.push(`<div class="mb-2">${lines.join('<br>')}</div>`);
-    });
-    
-    // Process alternative APIs only if suggestedApisOnly is false
-    const suggestedApisOnly = window.config?.suggestedApisOnly !== false;
-    if (!suggestedApisOnly) {
-      const alternativeApis = Array.isArray(apiData.alternativeApis) ? apiData.alternativeApis : [];
-      alternativeApis.forEach(api => {
-        const lines = [`🧩 API: <strong>${api.name || 'Unknown API'}</strong>`];
-        lines.push(`<strong>URL:</strong> ${api.mainPage}`);
-        
-        if (Array.isArray(api.documentationUrls) && api.documentationUrls.length > 0) {
-          if (api.documentationUrls.length === 1) {
-            lines.push(`<strong>Documentation:</strong> ${api.documentationUrls[0]}`);
-          } else {
-            lines.push(`<strong>Documentation:</strong>`);
-            api.documentationUrls.forEach(docUrl => {
-              lines.push(docUrl);
-            });
-          }
-        }
-        
-        apiEntries.push(`<div class="mb-2">${lines.join('<br>')}</div>`);
-      });
-    }
-    
-    // If no API data exists, return empty string
-    if (apiEntries.length === 0) {
-      return '';
-    }
-    
-    // Use the same spacing approach as extractSectionHTML
-    return apiEntries
-      .map((entry, idx) => (idx > 0 ? '<div class="mb-2">&nbsp;</div>' + entry : entry))
-      .join('');
+
+function getApisToRender(apiData, config) {
+  if (!apiData) return [];
+
+  const apis = [];
+  const suggestedOnly = !!(config && config.suggestedApisOnly);
+
+  if (Array.isArray(apiData.suggestedApis)) {
+    apis.push(...apiData.suggestedApis);
   }
-  
+
+  if (!suggestedOnly && Array.isArray(apiData.alternativeApis)) {
+    apis.push(...apiData.alternativeApis);
+  }
+
+  return apis;
+}
+
+/**
+ * Helper: format the stored API data in the ai_recommend_apis format
+ * "🧩 API" HTML snippet
+ */
+function formatApiDataForSummary(apiData) {
+  const apis = getApisToRender(apiData, window.config);
+  if (!Array.isArray(apis) || apis.length === 0) return '';
+
+  const apiEntries = apis.map(api => {
+    const lines = [`🧩 API: <strong>${api.name || 'Unknown API'}</strong>`];
+    if (api.mainPage) lines.push(`<strong>URL:</strong> ${api.mainPage}`);
+
+    if (Array.isArray(api.documentationUrls) && api.documentationUrls.length > 0) {
+      if (api.documentationUrls.length === 1) {
+        lines.push(`<strong>Documentation:</strong> ${api.documentationUrls[0]}`);
+      } else {
+        lines.push(`<strong>Documentation:</strong>`);
+        api.documentationUrls.forEach(docUrl => lines.push(docUrl));
+      }
+    }
+
+    return `<div class="mb-2">${lines.join('<br>')}</div>`;
+  });
+
+  return apiEntries
+    .map((entry, idx) => (idx > 0 ? '<div class="mb-2">&nbsp;</div>' + entry : entry))
+    .join('');
+}
+
 // Build the In-Scope Assets block for the Scope editor
 function buildAssetsBlockForScope(storedApiData) {
   const domain = (localStorage.getItem('enteredUrl') || '').trim();
